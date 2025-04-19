@@ -2,7 +2,9 @@ package hadi.veri.project1.fragments
 
 import android.app.AlertDialog
 import android.app.DatePickerDialog
+import android.content.Context
 import android.os.Bundle
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -11,6 +13,7 @@ import android.widget.ArrayAdapter
 import android.widget.EditText
 import android.widget.Spinner
 import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -59,7 +62,22 @@ class PesananUserFragment : Fragment() {
         setupTabLayout()
         setupSearchListener()
         setupFabListener()
+        
+        // Set judul halaman dan tombol back
+        (activity as? AppCompatActivity)?.supportActionBar?.apply {
+            title = "Pesanan User"
+            setDisplayHomeAsUpEnabled(true)
+        }
+        
         loadPesananData()
+    }
+    
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
+        
+        // Reset tombol back ketika fragment dihancurkan
+        (activity as? AppCompatActivity)?.supportActionBar?.setDisplayHomeAsUpEnabled(false)
     }
     
     private fun setupRecyclerView() {
@@ -87,7 +105,9 @@ class PesananUserFragment : Fragment() {
             }
             
             override fun onTabUnselected(tab: TabLayout.Tab?) {}
-            override fun onTabReselected(tab: TabLayout.Tab?) {}
+            override fun onTabReselected(tab: TabLayout.Tab?) {
+                filterPesananByStatus(tab?.position ?: 0)
+            }
         })
     }
     
@@ -96,7 +116,7 @@ class PesananUserFragment : Fragment() {
             if (!hasFocus) {
                 val query = binding.etCariPesanan.text.toString().trim()
                 if (query.isEmpty()) {
-                    loadPesananData()
+                    filterPesananByStatus(binding.tabLayoutPesanan.selectedTabPosition)
                 } else {
                     searchPesanan(query)
                 }
@@ -111,47 +131,114 @@ class PesananUserFragment : Fragment() {
     }
     
     private fun loadPesananData() {
-        pesananList.clear()
-        pesananList.addAll(dbHelper.getAllPesanan())
-        adapter.updateData(pesananList)
+        try {
+            // Log untuk membantu debugging
+            Log.d("PesananUserFragment", "Loading pesanan data")
+            
+            val allPesanan = dbHelper.getAllPesanan()
+            
+            // Tampilkan pesan jika tidak ada data
+            if (allPesanan.isEmpty()) {
+                binding.tvNoPesanan.visibility = View.VISIBLE
+                binding.rvPesanan.visibility = View.GONE
+            } else {
+                binding.tvNoPesanan.visibility = View.GONE
+                binding.rvPesanan.visibility = View.VISIBLE
+                
+                // Update adapter dengan data baru
+                pesananList.clear()
+                pesananList.addAll(allPesanan)
+                adapter.notifyDataSetChanged()
+            }
+
+            Log.d("PesananUserFragment", "Total pesanan loaded: ${pesananList.size}")
+        } catch (e: Exception) {
+            Log.e("PesananUserFragment", "Error loading pesanan: ${e.message}", e)
+            Toast.makeText(requireContext(), "Terjadi kesalahan: ${e.message}", Toast.LENGTH_SHORT).show()
+            binding.tvNoPesanan.visibility = View.VISIBLE
+            binding.rvPesanan.visibility = View.GONE
+        }
     }
     
     private fun filterPesananByStatus(tabPosition: Int) {
-        val allPesanan = dbHelper.getAllPesanan()
-        
-        pesananList.clear()
-        pesananList.addAll(when (tabPosition) {
-            0 -> allPesanan // Semua
-            1 -> allPesanan.filter { it.status == StatusPesanan.PENDING } // Pending
-            2 -> allPesanan.filter { it.status == StatusPesanan.PROSES } // Proses
-            3 -> allPesanan.filter { it.status == StatusPesanan.SELESAI } // Selesai
-            4 -> allPesanan.filter { it.status == StatusPesanan.DIBATALKAN } // Dibatalkan
-            else -> allPesanan
-        })
-        
-        adapter.updateData(pesananList)
+        try {
+            Log.d("PesananUserFragment", "Filtering pesanan by tab position: $tabPosition")
+            
+            val allPesanan = dbHelper.getAllPesanan()
+            
+            val filteredList = when (tabPosition) {
+                0 -> allPesanan // Semua
+                1 -> allPesanan.filter { it.status == StatusPesanan.PENDING } // Pending
+                2 -> allPesanan.filter { it.status == StatusPesanan.PROSES } // Proses
+                3 -> allPesanan.filter { it.status == StatusPesanan.SELESAI } // Selesai
+                4 -> allPesanan.filter { it.status == StatusPesanan.DIBATALKAN } // Dibatalkan
+                else -> allPesanan
+            }
+            
+            // Update tampilan berdasarkan hasil filter
+            if (filteredList.isEmpty()) {
+                binding.tvNoPesanan.visibility = View.VISIBLE
+                binding.rvPesanan.visibility = View.GONE
+                binding.tvNoPesanan.text = "Tidak ada pesanan dengan status tersebut"
+            } else {
+                binding.tvNoPesanan.visibility = View.GONE
+                binding.rvPesanan.visibility = View.VISIBLE
+                binding.tvNoPesanan.text = "Belum ada pesanan"
+            }
+            
+            // Update adapter dengan data filter
+            adapter.updateData(filteredList)
+            
+            Log.d("PesananUserFragment", "Filtered pesanan count: ${filteredList.size}")
+        } catch (e: Exception) {
+            Log.e("PesananUserFragment", "Error filtering pesanan: ${e.message}", e)
+            Toast.makeText(requireContext(), "Terjadi kesalahan saat filter: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
     }
     
     private fun searchPesanan(query: String) {
         val allPesanan = dbHelper.getAllPesanan()
         
-        pesananList.clear()
-        pesananList.addAll(allPesanan.filter { 
+        val filteredList = allPesanan.filter { 
             it.id.contains(query, ignoreCase = true) || 
             it.namaPembeli.contains(query, ignoreCase = true)
-        })
+        }
         
-        adapter.updateData(pesananList)
+        if (filteredList.isEmpty()) {
+            binding.tvNoPesanan.visibility = View.VISIBLE
+            binding.rvPesanan.visibility = View.GONE
+            binding.tvNoPesanan.text = "Tidak ada pesanan yang sesuai dengan pencarian"
+        } else {
+            binding.tvNoPesanan.visibility = View.GONE
+            binding.rvPesanan.visibility = View.VISIBLE
+        }
+        
+        adapter.updateData(filteredList)
     }
     
     private fun updateStatusPesanan(pesanan: Pesanan, newStatus: StatusPesanan) {
-        val result = dbHelper.updateStatusPesanan(pesanan.id, newStatus)
-        if (result > 0) {
-            loadPesananData()
-            filterPesananByStatus(binding.tabLayoutPesanan.selectedTabPosition)
-            Toast.makeText(requireContext(), "Status pesanan berhasil diubah", Toast.LENGTH_SHORT).show()
-        } else {
-            Toast.makeText(requireContext(), "Gagal mengubah status pesanan", Toast.LENGTH_SHORT).show()
+        try {
+            Log.d("PesananUserFragment", "Updating pesanan status: ${pesanan.id} to $newStatus")
+            
+            val updatedPesanan = pesanan.copy(status = newStatus)
+            val result = dbHelper.updateStatusPesanan(pesanan.id, newStatus)
+            
+            if (result > 0) {
+                // Perbarui pesanan dalam list dan adapter
+                val position = adapter.findPositionById(pesanan.id)
+                if (position >= 0) {
+                    adapter.updateItem(position, updatedPesanan)
+                    Toast.makeText(requireContext(), "Status pesanan berhasil diubah", Toast.LENGTH_SHORT).show()
+                }
+                
+                // Refresh data sesuai filter
+                filterPesananByStatus(binding.tabLayoutPesanan.selectedTabPosition)
+            } else {
+                Toast.makeText(requireContext(), "Gagal mengubah status pesanan", Toast.LENGTH_SHORT).show()
+            }
+        } catch (e: Exception) {
+            Log.e("PesananUserFragment", "Error updating pesanan status: ${e.message}", e)
+            Toast.makeText(requireContext(), "Terjadi kesalahan: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
     
@@ -162,7 +249,7 @@ class PesananUserFragment : Fragment() {
             .setPositiveButton("Ya") { _, _ ->
                 val result = dbHelper.deletePesanan(pesanan.id)
                 if (result > 0) {
-                    loadPesananData()
+                    // Refresh data
                     filterPesananByStatus(binding.tabLayoutPesanan.selectedTabPosition)
                     Toast.makeText(requireContext(), "Pesanan berhasil dihapus", Toast.LENGTH_SHORT).show()
                 } else {
@@ -265,7 +352,9 @@ class PesananUserFragment : Fragment() {
                     
                     val result = dbHelper.insertPesanan(pesanan)
                     if (result > 0) {
-                        loadPesananData()
+                        // Tambahkan pesanan baru ke adapter
+                        adapter.addItem(pesanan)
+                        // Refresh data sesuai filter
                         filterPesananByStatus(binding.tabLayoutPesanan.selectedTabPosition)
                         Toast.makeText(requireContext(), "Pesanan berhasil disimpan", Toast.LENGTH_SHORT).show()
                     } else {
@@ -273,6 +362,7 @@ class PesananUserFragment : Fragment() {
                     }
                     
                 } catch (e: Exception) {
+                    Log.e("PesananUserFragment", "Error saving pesanan: ${e.message}", e)
                     Toast.makeText(requireContext(), "Format input tidak valid", Toast.LENGTH_SHORT).show()
                 }
             }
@@ -291,10 +381,5 @@ class PesananUserFragment : Fragment() {
             calendar.set(Calendar.DAY_OF_MONTH, selectedDay)
             editText.setText(dateFormatter.format(calendar.time))
         }, year, month, day).show()
-    }
-
-    override fun onDestroyView() {
-        super.onDestroyView()
-        _binding = null
     }
 } 

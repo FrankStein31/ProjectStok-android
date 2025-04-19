@@ -7,7 +7,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
 import androidx.fragment.app.Fragment
-import hadi.veri.project1.LoginActivity
+import hadi.veri.project1.WelcomeActivity
 import hadi.veri.project1.databinding.FragmentProfileBinding
 
 class ProfileFragment : Fragment() {
@@ -60,7 +60,7 @@ class ProfileFragment : Fragment() {
         binding.btnLogout.setOnClickListener {
             // Logout dan kembali ke login screen
             Toast.makeText(requireContext(), "Berhasil logout", Toast.LENGTH_SHORT).show()
-            val intent = Intent(requireContext(), LoginActivity::class.java)
+            val intent = Intent(requireContext(), WelcomeActivity::class.java)
             startActivity(intent)
             requireActivity().finish()
         }

@@ -84,6 +84,16 @@
         </LinearLayout>
     </androidx.cardview.widget.CardView>
 
+    <TextView
+        android:id="@+id/tvNoPesanan"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Belum ada pesanan"
+        android:textAlignment="center"
+        android:textSize="18sp"
+        android:padding="16dp"
+        android:visibility="gone" />
+
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rvPesanan"
         android:layout_width="match_parent"

@@ -5,6 +5,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import hadi.veri.project1.adapters.BarangAdapter
@@ -36,6 +37,20 @@ class MasterStokFragment : Fragment() {
         setupRecyclerView()
         setupButtons()
         loadBarangData()
+        
+        // Set judul halaman dan tombol back
+        (activity as? AppCompatActivity)?.supportActionBar?.apply {
+            title = "Master Stok"
+            setDisplayHomeAsUpEnabled(true)
+        }
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
+        
+        // Reset tombol back ketika fragment dihancurkan
+        (activity as? AppCompatActivity)?.supportActionBar?.setDisplayHomeAsUpEnabled(false)
     }
 
     private fun setupRecyclerView() {
@@ -191,11 +206,6 @@ class MasterStokFragment : Fragment() {
         binding.etNamaBarang.text?.clear()
         binding.etJumlahStok.text?.clear()
         binding.etHargaBarang.text?.clear()
-    }
-
-    override fun onDestroyView() {
-        super.onDestroyView()
-        _binding = null
     }
 
     companion object {

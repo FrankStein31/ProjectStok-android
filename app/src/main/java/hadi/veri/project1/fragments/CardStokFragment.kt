@@ -6,6 +6,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import hadi.veri.project1.R
@@ -52,6 +53,20 @@ class CardStokFragment : Fragment() {
         setupDatePickers()
         setupSearchBarang()
         setupButtonAction()
+        
+        // Set judul halaman dan tombol back
+        (activity as? AppCompatActivity)?.supportActionBar?.apply {
+            title = "Kartu Stok"
+            setDisplayHomeAsUpEnabled(true)
+        }
+    }
+    
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
+        
+        // Reset tombol back ketika fragment dihancurkan
+        (activity as? AppCompatActivity)?.supportActionBar?.setDisplayHomeAsUpEnabled(false)
     }
     
     private fun setupRecyclerView() {
@@ -179,10 +194,5 @@ class CardStokFragment : Fragment() {
         // Update adapter
         adapter = TransaksiStokAdapter(transaksiList)
         binding.rvCardStock.adapter = adapter
-    }
-
-    override fun onDestroyView() {
-        super.onDestroyView()
-        _binding = null
     }
 } 

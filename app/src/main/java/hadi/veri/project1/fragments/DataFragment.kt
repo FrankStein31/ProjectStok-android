@@ -47,9 +47,9 @@ class DataFragment : Fragment() {
             navigateToFragment(PesananUserFragment.newInstance())
         }
         
-        // Navigasi ke Profile
-        binding.cardProfil.setOnClickListener {
-            navigateToFragment(ProfileFragment.newInstance())
+        // Navigasi ke Manajemen User (bukan Profile)
+        binding.cardUser.setOnClickListener {
+            navigateToFragment(UsersFragment.newInstance())
         }
     }
     

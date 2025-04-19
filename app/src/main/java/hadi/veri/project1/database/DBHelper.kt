@@ -11,12 +11,13 @@ import hadi.veri.project1.models.Pesanan
 import hadi.veri.project1.models.StatusPesanan
 import hadi.veri.project1.models.TipeTransaksi
 import hadi.veri.project1.models.TransaksiStok
+import hadi.veri.project1.models.User
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
 
-class DBHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, null, DATABASE_VERSION) {
+class DBHelper(private val mContext: Context) : SQLiteOpenHelper(mContext, DATABASE_NAME, null, DATABASE_VERSION) {
 
     companion object {
         private const val DATABASE_NAME = "stok_manager.db"
@@ -47,6 +48,7 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, null
         private const val COLUMN_TANGGAL_PESANAN = "tanggal"
         private const val COLUMN_TOTAL_HARGA = "total_harga"
         private const val COLUMN_STATUS = "status"
+        private const val COLUMN_USERNAME_PESANAN = "username"
 
         // Tabel Item Pesanan
         private const val TABLE_ITEM_PESANAN = "item_pesanan"
@@ -57,6 +59,17 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, null
         private const val COLUMN_JUMLAH_PESANAN = "jumlah"
         private const val COLUMN_HARGA_SATUAN = "harga_satuan"
         private const val COLUMN_SUBTOTAL = "subtotal"
+        
+        // Tabel Users
+        private const val TABLE_USERS = "users"
+        private const val COLUMN_ID_USER = "id"
+        private const val COLUMN_USERNAME = "username"
+        private const val COLUMN_PASSWORD = "password"
+        private const val COLUMN_JENIS_KELAMIN = "jenis_kelamin" 
+        private const val COLUMN_ROLE = "role"
+
+        // Referensi versi database sebelumnya
+        private const val OLD_DATABASE_VERSION = 0
     }
 
     override fun onCreate(db: SQLiteDatabase) {
@@ -94,7 +107,8 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, null
                 $COLUMN_NAMA_PEMBELI TEXT,
                 $COLUMN_TANGGAL_PESANAN TEXT,
                 $COLUMN_TOTAL_HARGA REAL,
-                $COLUMN_STATUS TEXT
+                $COLUMN_STATUS TEXT,
+                $COLUMN_USERNAME_PESANAN TEXT
             )
         """.trimIndent()
         db.execSQL(createPesananTable)
@@ -114,15 +128,52 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, null
             )
         """.trimIndent()
         db.execSQL(createItemPesananTable)
+        
+        // Buat tabel Users
+        val createUsersTable = """
+            CREATE TABLE $TABLE_USERS (
+                $COLUMN_ID_USER TEXT PRIMARY KEY,
+                $COLUMN_USERNAME TEXT UNIQUE,
+                $COLUMN_PASSWORD TEXT,
+                $COLUMN_JENIS_KELAMIN TEXT,
+                $COLUMN_ROLE TEXT
+            )
+        """.trimIndent()
+        db.execSQL(createUsersTable)
+        
+        // Tambahkan user admin default
+        val adminValues = ContentValues().apply {
+            put(COLUMN_ID_USER, UUID.randomUUID().toString())
+            put(COLUMN_USERNAME, "admin")
+            put(COLUMN_PASSWORD, "admin")
+            put(COLUMN_JENIS_KELAMIN, "Laki-laki")
+            put(COLUMN_ROLE, "Admin")
+        }
+        db.insert(TABLE_USERS, null, adminValues)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        // Hapus tabel jika database diupgrade
-        db.execSQL("DROP TABLE IF EXISTS $TABLE_ITEM_PESANAN")
-        db.execSQL("DROP TABLE IF EXISTS $TABLE_PESANAN")
-        db.execSQL("DROP TABLE IF EXISTS $TABLE_TRANSAKSI_STOK")
-        db.execSQL("DROP TABLE IF EXISTS $TABLE_BARANG")
+        // Versi baru tidak perlu menghapus tabel dan data yang ada
+        // Hanya tambahkan perubahan skema jika diperlukan
+        android.util.Log.d("DBHelper", "onUpgrade called: oldVersion=$oldVersion, newVersion=$newVersion")
+        
+        // Contoh penanganan migrasi berdasarkan versi
+        if (oldVersion < 2) {
+            // Migrasi dari versi 1 ke 2 (contoh: tambah kolom baru)
+            // db.execSQL("ALTER TABLE $TABLE_USERS ADD COLUMN new_column TEXT")
+        }
+        
+        if (oldVersion < 3) {
+            // Migrasi dari versi 2 ke 3
+        }
+        
+        // Pendekatan lama yang menghapus data:
+        /*
+        db.execSQL("DROP TABLE IF EXISTS $TABLE_USERS")
+        db.execSQL("DROP TABLE IF EXISTS $TABLE_TRANSACTIONS")
+        db.execSQL("DROP TABLE IF EXISTS $TABLE_ITEMS")
         onCreate(db)
+        */
     }
 
     // Helper untuk konversi Date ke String dan sebaliknya
@@ -271,6 +322,10 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, null
     fun insertPesanan(pesanan: Pesanan): Long {
         val db = this.writableDatabase
         
+        // Get username dari SharedPreferences
+        val sharedPreferences = mContext.getSharedPreferences("login_session", Context.MODE_PRIVATE)
+        val username = sharedPreferences.getString("username", "admin") ?: "admin"
+        
         // Insert pesanan
         val pesananValues = ContentValues().apply {
             put(COLUMN_ID_PESANAN, pesanan.id)
@@ -278,6 +333,7 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, null
             put(COLUMN_TANGGAL_PESANAN, dateToString(pesanan.tanggal))
             put(COLUMN_TOTAL_HARGA, pesanan.totalHarga)
             put(COLUMN_STATUS, pesanan.status.name)
+            put(COLUMN_USERNAME_PESANAN, username)
         }
         val pesananResult = db.insert(TABLE_PESANAN, null, pesananValues)
         
@@ -351,7 +407,14 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, null
                 val namaPembeli = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_NAMA_PEMBELI))
                 val tanggal = stringToDate(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_TANGGAL_PESANAN)))
                 val totalHarga = cursor.getDouble(cursor.getColumnIndexOrThrow(COLUMN_TOTAL_HARGA))
-                val status = StatusPesanan.valueOf(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_STATUS)))
+                
+                // Default status PENDING jika tidak ada
+                var status = StatusPesanan.PENDING
+                try {
+                    status = StatusPesanan.valueOf(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_STATUS)))
+                } catch (e: Exception) {
+                    // Jika status tidak valid, gunakan default
+                }
 
                 // Ambil item pesanan
                 val items = getItemPesananByPesananId(id)
@@ -512,5 +575,251 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, null
         
         db.close()
         return result
+    }
+
+    // ======== OPERASI CRUD UNTUK USERS ========
+    
+    fun registerUser(user: User): Long {
+        val db = this.writableDatabase
+        val values = ContentValues().apply {
+            put(COLUMN_ID_USER, user.id)
+            put(COLUMN_USERNAME, user.username)
+            put(COLUMN_PASSWORD, user.password)
+            put(COLUMN_JENIS_KELAMIN, user.jenisKelamin)
+            put(COLUMN_ROLE, user.role)
+        }
+        val result = db.insert(TABLE_USERS, null, values)
+        db.close()
+        return result
+    }
+    
+    fun loginUser(username: String, password: String): User? {
+        val db = this.readableDatabase
+        
+        // Debug: Log info untuk troubleshooting
+        android.util.Log.d("DBHelper", "Login attempt: username=$username, password=$password")
+        
+        // Cek apakah tabel users sudah ada
+        val cursor = db.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name='$TABLE_USERS'", null)
+        val tableExists = cursor.count > 0
+        cursor.close()
+        
+        if (!tableExists) {
+            // Buat tabel users jika belum ada
+            val createUsersTable = """
+                CREATE TABLE $TABLE_USERS (
+                    $COLUMN_ID_USER TEXT PRIMARY KEY,
+                    $COLUMN_USERNAME TEXT UNIQUE,
+                    $COLUMN_PASSWORD TEXT,
+                    $COLUMN_JENIS_KELAMIN TEXT,
+                    $COLUMN_ROLE TEXT
+                )
+            """.trimIndent()
+            db.execSQL(createUsersTable)
+            
+            // Tambahkan user admin default
+            val adminId = UUID.randomUUID().toString()
+            val adminValues = ContentValues().apply {
+                put(COLUMN_ID_USER, adminId)
+                put(COLUMN_USERNAME, "admin")
+                put(COLUMN_PASSWORD, "admin")
+                put(COLUMN_JENIS_KELAMIN, "Laki-laki")
+                put(COLUMN_ROLE, "Admin")
+            }
+            db.insert(TABLE_USERS, null, adminValues)
+            
+            // Cek jika username dan password adalah admin default
+            if (username == "admin" && password == "admin") {
+                android.util.Log.d("DBHelper", "Login success: Admin default")
+                return User(adminId, "admin", "admin", "Laki-laki", "Admin")
+            }
+            
+            return null
+        }
+        
+        val query = "SELECT * FROM $TABLE_USERS WHERE $COLUMN_USERNAME = ? AND $COLUMN_PASSWORD = ?"
+        val cursorLogin = db.rawQuery(query, arrayOf(username, password))
+        
+        // Debug: Log info rows returned
+        android.util.Log.d("DBHelper", "Login query result rows: ${cursorLogin.count}")
+        
+        var user: User? = null
+        
+        if (cursorLogin.moveToFirst()) {
+            val id = cursorLogin.getString(cursorLogin.getColumnIndexOrThrow(COLUMN_ID_USER))
+            val jenisKelamin = cursorLogin.getString(cursorLogin.getColumnIndexOrThrow(COLUMN_JENIS_KELAMIN))
+            val role = cursorLogin.getString(cursorLogin.getColumnIndexOrThrow(COLUMN_ROLE))
+            
+            user = User(id, username, password, jenisKelamin, role)
+            android.util.Log.d("DBHelper", "Login success: user found - ${user.username}, role=${user.role}")
+        } else {
+            android.util.Log.d("DBHelper", "Login failed: user not found")
+        }
+        
+        cursorLogin.close()
+        db.close()
+        return user
+    }
+    
+    fun getAllUsers(): List<User> {
+        val userList = mutableListOf<User>()
+        val db = this.readableDatabase
+        
+        // Cek apakah tabel users sudah ada
+        val cursor = db.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name='$TABLE_USERS'", null)
+        val tableExists = cursor.count > 0
+        cursor.close()
+        
+        if (!tableExists) {
+            // Buat tabel users jika belum ada
+            val createUsersTable = """
+                CREATE TABLE $TABLE_USERS (
+                    $COLUMN_ID_USER TEXT PRIMARY KEY,
+                    $COLUMN_USERNAME TEXT UNIQUE,
+                    $COLUMN_PASSWORD TEXT,
+                    $COLUMN_JENIS_KELAMIN TEXT,
+                    $COLUMN_ROLE TEXT
+                )
+            """.trimIndent()
+            db.execSQL(createUsersTable)
+            
+            // Tambahkan user admin default
+            val adminValues = ContentValues().apply {
+                put(COLUMN_ID_USER, UUID.randomUUID().toString())
+                put(COLUMN_USERNAME, "admin")
+                put(COLUMN_PASSWORD, "admin")
+                put(COLUMN_JENIS_KELAMIN, "Laki-laki")
+                put(COLUMN_ROLE, "Admin")
+            }
+            db.insert(TABLE_USERS, null, adminValues)
+            
+            userList.add(User(adminValues.getAsString(COLUMN_ID_USER), "admin", "admin", "Laki-laki", "Admin"))
+            return userList
+        }
+        
+        val query = "SELECT * FROM $TABLE_USERS"
+        val cursorUsers = db.rawQuery(query, null)
+        
+        if (cursorUsers.moveToFirst()) {
+            do {
+                val id = cursorUsers.getString(cursorUsers.getColumnIndexOrThrow(COLUMN_ID_USER))
+                val username = cursorUsers.getString(cursorUsers.getColumnIndexOrThrow(COLUMN_USERNAME))
+                val password = cursorUsers.getString(cursorUsers.getColumnIndexOrThrow(COLUMN_PASSWORD))
+                val jenisKelamin = cursorUsers.getString(cursorUsers.getColumnIndexOrThrow(COLUMN_JENIS_KELAMIN))
+                val role = cursorUsers.getString(cursorUsers.getColumnIndexOrThrow(COLUMN_ROLE))
+                
+                val user = User(id, username, password, jenisKelamin, role)
+                userList.add(user)
+            } while (cursorUsers.moveToNext())
+        }
+        
+        cursorUsers.close()
+        db.close()
+        return userList
+    }
+    
+    fun updateUser(user: User): Int {
+        val db = this.writableDatabase
+        
+        // Cek apakah tabel users sudah ada
+        val cursor = db.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name='$TABLE_USERS'", null)
+        val tableExists = cursor.count > 0
+        cursor.close()
+        
+        if (!tableExists) {
+            // Buat tabel users jika belum ada
+            val createUsersTable = """
+                CREATE TABLE $TABLE_USERS (
+                    $COLUMN_ID_USER TEXT PRIMARY KEY,
+                    $COLUMN_USERNAME TEXT UNIQUE,
+                    $COLUMN_PASSWORD TEXT,
+                    $COLUMN_JENIS_KELAMIN TEXT,
+                    $COLUMN_ROLE TEXT
+                )
+            """.trimIndent()
+            db.execSQL(createUsersTable)
+            return 0
+        }
+        
+        val values = ContentValues().apply {
+            put(COLUMN_USERNAME, user.username)
+            put(COLUMN_PASSWORD, user.password)
+            put(COLUMN_JENIS_KELAMIN, user.jenisKelamin)
+            put(COLUMN_ROLE, user.role)
+        }
+        
+        val result = db.update(TABLE_USERS, values, "$COLUMN_ID_USER = ?", arrayOf(user.id))
+        db.close()
+        return result
+    }
+    
+    fun deleteUser(userId: String): Int {
+        val db = this.writableDatabase
+        
+        // Cek apakah tabel users sudah ada
+        val cursor = db.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name='$TABLE_USERS'", null)
+        val tableExists = cursor.count > 0
+        cursor.close()
+        
+        if (!tableExists) {
+            // Buat tabel users jika belum ada
+            val createUsersTable = """
+                CREATE TABLE $TABLE_USERS (
+                    $COLUMN_ID_USER TEXT PRIMARY KEY,
+                    $COLUMN_USERNAME TEXT UNIQUE,
+                    $COLUMN_PASSWORD TEXT,
+                    $COLUMN_JENIS_KELAMIN TEXT,
+                    $COLUMN_ROLE TEXT
+                )
+            """.trimIndent()
+            db.execSQL(createUsersTable)
+            return 0
+        }
+        
+        val result = db.delete(TABLE_USERS, "$COLUMN_ID_USER = ?", arrayOf(userId))
+        db.close()
+        return result
+    }
+    
+    fun checkUsernameExists(username: String): Boolean {
+        val db = this.readableDatabase
+        
+        // Cek apakah tabel users sudah ada
+        val cursor = db.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name='$TABLE_USERS'", null)
+        val tableExists = cursor.count > 0
+        cursor.close()
+        
+        if (!tableExists) {
+            // Buat tabel users jika belum ada
+            val createUsersTable = """
+                CREATE TABLE $TABLE_USERS (
+                    $COLUMN_ID_USER TEXT PRIMARY KEY,
+                    $COLUMN_USERNAME TEXT UNIQUE,
+                    $COLUMN_PASSWORD TEXT,
+                    $COLUMN_JENIS_KELAMIN TEXT,
+                    $COLUMN_ROLE TEXT
+                )
+            """.trimIndent()
+            db.execSQL(createUsersTable)
+            
+            // Tambahkan user admin default
+            val adminValues = ContentValues().apply {
+                put(COLUMN_ID_USER, UUID.randomUUID().toString())
+                put(COLUMN_USERNAME, "admin")
+                put(COLUMN_PASSWORD, "admin")
+                put(COLUMN_JENIS_KELAMIN, "Laki-laki")
+                put(COLUMN_ROLE, "Admin")
+            }
+            db.insert(TABLE_USERS, null, adminValues)
+            
+            return false
+        }
+        
+        val queryCek = "SELECT * FROM $TABLE_USERS WHERE $COLUMN_USERNAME = ?"
+        val cursorCek = db.rawQuery(queryCek, arrayOf(username))
+        val exists = cursorCek.count > 0
+        cursorCek.close()
+        db.close()
+        return exists
     }
 }

@@ -77,28 +77,58 @@ class PesananAdapter(
                 binding.containerItems.addView(moreText)
             }
             
+            // Atur tombol-tombol berdasarkan status
             when (pesanan.status) {
                 StatusPesanan.PENDING -> {
-                    binding.btnProses.text = "Proses"
+                    // Tampilkan tombol Proses dan Batal
                     binding.btnProses.visibility = View.VISIBLE
+                    binding.btnProses.text = "Proses"
                     binding.btnProses.setOnClickListener {
                         onStatusChange(pesanan, StatusPesanan.PROSES)
                     }
+                    
+                    // Tampilkan tombol Batal dengan warna merah
+                    binding.btnDetail.text = "Batal"
+                    binding.btnDetail.backgroundTintList = ContextCompat.getColorStateList(
+                        itemView.context, 
+                        R.color.error
+                    )
+                    binding.btnDetail.setOnClickListener {
+                        onStatusChange(pesanan, StatusPesanan.DIBATALKAN)
+                    }
                 }
                 StatusPesanan.PROSES -> {
-                    binding.btnProses.text = "Selesai"
+                    // Tampilkan tombol Selesai dan Batal
                     binding.btnProses.visibility = View.VISIBLE
+                    binding.btnProses.text = "Selesai"
                     binding.btnProses.setOnClickListener {
                         onStatusChange(pesanan, StatusPesanan.SELESAI)
                     }
+                    
+                    // Tampilkan tombol Batal dengan warna merah
+                    binding.btnDetail.text = "Batal"
+                    binding.btnDetail.backgroundTintList = ContextCompat.getColorStateList(
+                        itemView.context, 
+                        R.color.error
+                    )
+                    binding.btnDetail.setOnClickListener {
+                        onStatusChange(pesanan, StatusPesanan.DIBATALKAN)
+                    }
                 }
-                else -> {
+                StatusPesanan.SELESAI, StatusPesanan.DIBATALKAN -> {
+                    // Sembunyikan tombol Proses
                     binding.btnProses.visibility = View.GONE
+                    
+                    // Ubah tombol Detail kembali ke warna normal dan fungsi detail
+                    binding.btnDetail.text = "Detail"
+                    binding.btnDetail.backgroundTintList = ContextCompat.getColorStateList(
+                        itemView.context, 
+                        R.color.primary
+                    )
+                    binding.btnDetail.setOnClickListener {
+                        onEdit(pesanan)
+                    }
                 }
-            }
-            
-            binding.btnDetail.setOnClickListener {
-                onEdit(pesanan)
             }
             
             binding.btnHapus.setOnClickListener {

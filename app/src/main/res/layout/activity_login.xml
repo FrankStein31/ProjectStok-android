@@ -26,7 +26,8 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        app:srcCompat="@drawable/logoo_11_removebg_preview" />
+        android:src="@drawable/baseline_inventory_24"
+        app:tint="#64C3BF" />
 
     <TextView
         android:id="@+id/textV1"
@@ -68,7 +69,7 @@
         app:layout_constraintTop_toBottomOf="@+id/subtitleText">
 
         <com.google.android.material.textfield.TextInputEditText
-            android:id="@+id/editTx1"
+            android:id="@+id/etUsername"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:hint="Username"
@@ -88,7 +89,7 @@
         app:passwordToggleEnabled="true">
 
         <com.google.android.material.textfield.TextInputEditText
-            android:id="@+id/editTx2"
+            android:id="@+id/etPassword"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:hint="Password"
@@ -96,7 +97,7 @@
     </com.google.android.material.textfield.TextInputLayout>
 
     <com.google.android.material.button.MaterialButton
-        android:id="@+id/bttn1"
+        android:id="@+id/btnLogin"
         android:layout_width="0dp"
         android:layout_height="56dp"
         android:layout_marginTop="32dp"
@@ -114,9 +115,9 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
         android:orientation="horizontal"
-        app:layout_constraintEnd_toEndOf="@+id/bttn1"
-        app:layout_constraintStart_toStartOf="@+id/bttn1"
-        app:layout_constraintTop_toBottomOf="@+id/bttn1">
+        app:layout_constraintEnd_toEndOf="@+id/btnLogin"
+        app:layout_constraintStart_toStartOf="@+id/btnLogin"
+        app:layout_constraintTop_toBottomOf="@+id/btnLogin">
 
         <TextView
             android:layout_width="wrap_content"
@@ -125,7 +126,7 @@
             android:textColor="#666666" />
 
         <TextView
-            android:id="@+id/txtSignUp"
+            android:id="@+id/tvRegister"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Daftar disini"
