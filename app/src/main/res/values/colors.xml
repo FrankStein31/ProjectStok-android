@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    
+    <!-- Warna aplikasi -->
+    <color name="primary">#64C3BF</color>
+    <color name="primary_variant">#53B2AE</color>
+    <color name="secondary">#BBE8E5</color>
+    <color name="secondary_variant">#A9D6D3</color>
+    <color name="accent">#FF5722</color>
+    
+    <color name="background">#BBE8E5</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="error">#F44336</color>
+    
+    <color name="on_primary">#FFFFFF</color>
+    <color name="on_secondary">#333333</color>
+    <color name="on_background">#333333</color>
+    <color name="on_surface">#333333</color>
+    <color name="on_error">#FFFFFF</color>
+    
+    <color name="text_primary">#333333</color>
+    <color name="text_secondary">#666666</color>
+</resources>
