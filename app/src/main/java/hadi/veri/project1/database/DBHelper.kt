@@ -822,4 +822,25 @@ class DBHelper(private val mContext: Context) : SQLiteOpenHelper(mContext, DATAB
         db.close()
         return exists
     }
+
+    fun getUserByUsername(username: String): User? {
+        val db = this.readableDatabase
+        var user: User? = null
+        
+        val query = "SELECT * FROM $TABLE_USERS WHERE $COLUMN_USERNAME = ?"
+        val cursor = db.rawQuery(query, arrayOf(username))
+        
+        if (cursor.moveToFirst()) {
+            val id = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_ID_USER))
+            val password = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_PASSWORD))
+            val jenisKelamin = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_JENIS_KELAMIN))
+            val role = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_ROLE))
+            
+            user = User(id, username, password, jenisKelamin, role)
+        }
+        
+        cursor.close()
+        db.close()
+        return user
+    }
 }
