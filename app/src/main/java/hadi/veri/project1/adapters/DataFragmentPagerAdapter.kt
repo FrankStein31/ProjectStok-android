@@ -9,18 +9,31 @@ import hadi.veri.project1.fragments.MasterStokFragment
 import hadi.veri.project1.fragments.MutasiStokFragment
 import hadi.veri.project1.fragments.PesananUserFragment
 
-class DataFragmentPagerAdapter(fragmentManager: FragmentManager, lifecycle: Lifecycle) : 
-    FragmentStateAdapter(fragmentManager, lifecycle) {
+class DataFragmentPagerAdapter(
+    fragmentManager: FragmentManager, 
+    lifecycle: Lifecycle,
+    private val userRole: String
+) : FragmentStateAdapter(fragmentManager, lifecycle) {
     
     override fun getItemCount(): Int = 4
 
     override fun createFragment(position: Int): Fragment {
         return when (position) {
-            0 -> MasterStokFragment.newInstance()
-            1 -> CardStokFragment.newInstance()
-            2 -> MutasiStokFragment.newInstance()
-            3 -> PesananUserFragment.newInstance()
-            else -> MasterStokFragment.newInstance()
+            0 -> MasterStokFragment().apply {
+                arguments = androidx.core.os.bundleOf("role" to userRole)
+            }
+            1 -> CardStokFragment().apply {
+                arguments = androidx.core.os.bundleOf("role" to userRole)
+            }
+            2 -> MutasiStokFragment().apply {
+                arguments = androidx.core.os.bundleOf("role" to userRole)
+            }
+            3 -> PesananUserFragment().apply {
+                arguments = androidx.core.os.bundleOf("role" to userRole)
+            }
+            else -> MasterStokFragment().apply {
+                arguments = androidx.core.os.bundleOf("role" to userRole)
+            }
         }
     }
 } 

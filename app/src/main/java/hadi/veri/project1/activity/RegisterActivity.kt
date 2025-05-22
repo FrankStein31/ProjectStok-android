@@ -7,7 +7,7 @@ import androidx.appcompat.app.AppCompatActivity
 import hadi.veri.project1.WelcomeActivity
 import hadi.veri.project1.database.DBHelper
 import hadi.veri.project1.databinding.ActivityRegisterBinding
-import hadi.veri.project1.models.User
+import hadi.veri.project1.models.UserLocal
 import java.util.UUID
 
 class RegisterActivity : AppCompatActivity() {
@@ -47,7 +47,7 @@ class RegisterActivity : AppCompatActivity() {
             val jenisKelamin = if (binding.rbLaki.isChecked) "Laki-laki" else "Perempuan"
             val role = if (binding.rbAdmin.isChecked) "Admin" else "User"
             
-            val user = User(
+            val user = UserLocal(
                 0,
                 username,
                 password,

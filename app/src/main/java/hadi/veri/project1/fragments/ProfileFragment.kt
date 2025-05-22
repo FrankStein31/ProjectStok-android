@@ -6,18 +6,21 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.ViewModelProvider
 import hadi.veri.project1.WelcomeActivity
 import hadi.veri.project1.databinding.FragmentProfileBinding
+import hadi.veri.project1.models.User
+import hadi.veri.project1.viewmodels.AuthViewModel
+import hadi.veri.project1.viewmodels.ViewModelFactory
 
 class ProfileFragment : Fragment() {
     private var _binding: FragmentProfileBinding? = null
     private val binding get() = _binding!!
-
-    private var userName = "Nama"
-    private var userEmail = "Email"
-    private var userPhone = "+62 88888888888"
-    private var userPosition = "Manajer Gudang"
+    
+    private lateinit var authViewModel: AuthViewModel
+    private var userRole: String? = null
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -25,78 +28,132 @@ class ProfileFragment : Fragment() {
         savedInstanceState: Bundle?
     ): View {
         _binding = FragmentProfileBinding.inflate(inflater, container, false)
+        
+        // Inisialisasi ViewModel
+        val factory = ViewModelFactory.getInstance(requireContext())
+        authViewModel = ViewModelProvider(this, factory)[AuthViewModel::class.java]
+        
         return binding.root
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         
-        displayUserInfo()
+        // Ambil data profil
+        loadProfile()
         setupButtons()
-    }
-
-    private fun displayUserInfo() {
-        binding.tvUserName.text = userName
-        binding.tvUserEmail.text = userEmail
-        binding.tvUserPhone.text = userPhone
-        binding.tvUserPosition.text = userPosition
         
-        // Set nilai-nilai di form edit
-        binding.etUpdateName.setText(userName)
-        binding.etUpdateEmail.setText(userEmail)
-        binding.etUpdatePhone.setText(userPhone)
-        binding.etUpdatePosition.setText(userPosition)
+        // Observe profil
+        observeViewModel()
+
+        // Set title
+        (activity as? AppCompatActivity)?.supportActionBar?.apply {
+            title = "Profil"
+            setDisplayHomeAsUpEnabled(true)
+        }
+    }
+    
+    private fun observeViewModel() {
+        // Observe profile result
+        authViewModel.profileResult.observe(viewLifecycleOwner) { result ->
+            result.onSuccess { response ->
+                if (response.success && response.data != null) {
+                    updateUI(response.data)
+                } else {
+                    Toast.makeText(requireContext(), response.message, Toast.LENGTH_SHORT).show()
+                }
+            }.onFailure { e ->
+                Toast.makeText(requireContext(), "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+        
+        // Observe update profile result
+        authViewModel.updateProfileResult.observe(viewLifecycleOwner) { result ->
+            result.onSuccess { response ->
+                if (response.success && response.data != null) {
+                    Toast.makeText(requireContext(), "Profil berhasil diperbarui", Toast.LENGTH_SHORT).show()
+                    updateUI(response.data)
+                } else {
+                    Toast.makeText(requireContext(), response.message, Toast.LENGTH_SHORT).show()
+                }
+            }.onFailure { e ->
+                Toast.makeText(requireContext(), "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+        
+        // Observe logout result
+        authViewModel.logoutResult.observe(viewLifecycleOwner) { result ->
+            result.onSuccess { response ->
+                if (response.success) {
+                    Toast.makeText(requireContext(), "Logout berhasil", Toast.LENGTH_SHORT).show()
+                    navigateToLogin()
+                } else {
+                    Toast.makeText(requireContext(), response.message, Toast.LENGTH_SHORT).show()
+                }
+            }.onFailure { e ->
+                Toast.makeText(requireContext(), "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+    
+    private fun loadProfile() {
+        // Tampilkan data user yang sedang login
+        if (authViewModel.isLoggedIn()) {
+            val user = authViewModel.getUser()
+            updateUI(user)
+            
+            // Update juga dari API untuk memastikan data terbaru
+            authViewModel.getProfile()
+        } else {
+            // Redirect ke halaman login jika belum login
+            navigateToLogin()
+        }
+    }
+    
+    private fun updateUI(user: User) {
+        binding.tvNama.text = user.name
+        binding.tvEmail.text = user.email
+        binding.tvRole.text = user.role
+        binding.etNama.setText(user.name)
+        binding.etPhone.setText(user.phone ?: "")
+        binding.etAlamat.setText(user.address ?: "")
     }
     
     private fun setupButtons() {
-        binding.btnUpdateProfile.setOnClickListener {
-            updateUserProfile()
-        }
-        
-        binding.btnChangePhoto.setOnClickListener {
-            Toast.makeText(requireContext(), "Belum di koding oiiii", Toast.LENGTH_SHORT).show()
+        binding.btnUpdate.setOnClickListener {
+            updateProfile()
         }
         
         binding.btnLogout.setOnClickListener {
-            // Logout dan kembali ke login screen
-            Toast.makeText(requireContext(), "Berhasil logout", Toast.LENGTH_SHORT).show()
-            val intent = Intent(requireContext(), WelcomeActivity::class.java)
-            startActivity(intent)
-            requireActivity().finish()
+            authViewModel.logout()
         }
     }
     
-    private fun updateUserProfile() {
-        val newName = binding.etUpdateName.text.toString().trim()
-        val newEmail = binding.etUpdateEmail.text.toString().trim()
-        val newPhone = binding.etUpdatePhone.text.toString().trim()
-        val newPosition = binding.etUpdatePosition.text.toString().trim()
+    private fun updateProfile() {
+        val name = binding.etNama.text.toString().trim()
+        val phone = binding.etPhone.text.toString().trim()
+        val address = binding.etAlamat.text.toString().trim()
         
-        if (newName.isEmpty() || newEmail.isEmpty() || newPhone.isEmpty() || newPosition.isEmpty()) {
-            Toast.makeText(requireContext(), "Semua field harus diisi", Toast.LENGTH_SHORT).show()
+        if (name.isEmpty()) {
+            Toast.makeText(requireContext(), "Nama tidak boleh kosong", Toast.LENGTH_SHORT).show()
             return
         }
         
-        // Simple email validation
-        if (!android.util.Patterns.EMAIL_ADDRESS.matcher(newEmail).matches()) {
-            Toast.makeText(requireContext(), "Format email tidak valid", Toast.LENGTH_SHORT).show()
-            return
-        }
-        
-        // Update user info
-        userName = newName
-        userEmail = newEmail
-        userPhone = newPhone
-        userPosition = newPosition
-        
-        displayUserInfo()
-        
-        Toast.makeText(requireContext(), "Profil berhasil diperbarui", Toast.LENGTH_SHORT).show()
+        authViewModel.updateProfile(name, phone, address)
+    }
+    
+    private fun navigateToLogin() {
+        // Implementasikan navigasi ke LoginActivity
+        // Contoh:
+        // val intent = Intent(requireContext(), LoginActivity::class.java)
+        // startActivity(intent)
+        // activity?.finish()
     }
 
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
+        (activity as? AppCompatActivity)?.supportActionBar?.setDisplayHomeAsUpEnabled(false)
     }
 
     companion object {

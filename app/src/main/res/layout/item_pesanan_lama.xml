@@ -1,10 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_margin="8dp"
+    android:layout_margin="4dp"
     app:cardCornerRadius="8dp"
     app:cardElevation="2dp">
 
@@ -22,16 +21,16 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="No. Pesanan: "
+                android:text="ID: "
                 android:textStyle="bold"
                 android:textColor="@color/text_primary" />
 
             <TextView
-                android:id="@+id/tvOrderNumber"
+                android:id="@+id/tvIdPesanan"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textColor="@color/primary"
-                tools:text="ORD-20230101-ABCDE" />
+                android:text="P001"
+                android:textColor="@color/primary" />
 
         </LinearLayout>
 
@@ -44,16 +43,16 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Status: "
+                android:text="Kode Barang: "
                 android:textColor="@color/text_primary"
                 android:textStyle="bold" />
 
             <TextView
-                android:id="@+id/tvStatus"
+                android:id="@+id/tvKodeBarangPesanan"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textColor="@color/accent"
-                tools:text="Menunggu" />
+                android:text="Nama Barang"
+                android:textColor="@color/text_secondary" />
         </LinearLayout>
 
         <LinearLayout
@@ -65,16 +64,16 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Tanggal: "
+                android:text="Nama Barang: "
                 android:textColor="@color/text_primary"
                 android:textStyle="bold" />
 
             <TextView
-                android:id="@+id/tvTanggal"
+                android:id="@+id/tvNamaPesanan"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textColor="@color/text_secondary"
-                tools:text="2023-01-01" />
+                android:text="01-01-2023"
+                android:textColor="@color/text_secondary" />
         </LinearLayout>
 
         <LinearLayout
@@ -86,17 +85,24 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Item: "
+                android:text="Jumlah "
                 android:textColor="@color/text_primary"
                 android:textStyle="bold" />
 
             <TextView
-                android:id="@+id/tvJumlahItem"
+                android:id="@+id/tvJumlahPesanan"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textColor="@color/text_secondary"
-                tools:text="3 item" />
+                android:text="01-01-2023"
+                android:textColor="@color/text_secondary" />
         </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/containerItems"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="4dp" />
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -107,17 +113,56 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Total: "
+                android:text="Tipe Transaksi: "
                 android:textColor="@color/text_primary"
                 android:textStyle="bold" />
 
             <TextView
-                android:id="@+id/tvTotalHarga"
+                android:id="@+id/tvTipeTransaksiPesanan"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:text="Rp 300.000"
                 android:textStyle="bold"
-                android:textColor="@color/primary"
-                tools:text="Rp 300.000" />
+                android:textColor="@color/primary" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/layoutAksi"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="8dp">
+
+            <Button
+                android:id="@+id/btnDetail"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Detail"
+                android:textSize="12sp"
+                android:backgroundTint="@color/primary"
+                android:layout_marginEnd="4dp" />
+
+            <Button
+                android:id="@+id/btnProses"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Proses"
+                android:textSize="12sp"
+                android:backgroundTint="@color/accent"
+                android:layout_marginStart="4dp"
+                android:layout_marginEnd="4dp" />
+
+            <Button
+                android:id="@+id/btnHapus"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Hapus"
+                android:textSize="12sp"
+                android:backgroundTint="@color/error"
+                android:layout_marginStart="4dp" />
         </LinearLayout>
     </LinearLayout>
-</androidx.cardview.widget.CardView>
+</androidx.cardview.widget.CardView> 

@@ -28,7 +28,7 @@ class PesananAdapter(
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PesananViewHolder {
-        val view = LayoutInflater.from(parent.context).inflate(R.layout.item_pesanan, parent, false)
+        val view = LayoutInflater.from(parent.context).inflate(R.layout.item_pesanan_lama, parent, false)
         return PesananViewHolder(view)
     }
 

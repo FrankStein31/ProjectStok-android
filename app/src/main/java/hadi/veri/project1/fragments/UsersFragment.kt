@@ -10,7 +10,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import hadi.veri.project1.adapters.UserAdapter
 import hadi.veri.project1.database.DBHelper
 import hadi.veri.project1.databinding.FragmentUsersBinding
-import hadi.veri.project1.models.User
+import hadi.veri.project1.models.UserLocal
 import java.util.UUID
 
 class UsersFragment : Fragment() {
@@ -19,7 +19,7 @@ class UsersFragment : Fragment() {
 
     private lateinit var dbHelper: DBHelper
     private lateinit var adapter: UserAdapter
-    private val userList = mutableListOf<User>()
+    private val userList = mutableListOf<UserLocal>()
     private var selectedPosition = -1
 
     override fun onCreateView(
@@ -96,8 +96,8 @@ class UsersFragment : Fragment() {
                     return@setOnClickListener
                 }
 
-                val user = User(
-                    null,
+                val user = UserLocal(
+                    0, // ID akan dihasilkan oleh SQLite dengan AUTOINCREMENT
                     username,
                     password,
                     jenisKelamin,
@@ -113,7 +113,7 @@ class UsersFragment : Fragment() {
                     Toast.makeText(requireContext(), "Gagal menambahkan user", Toast.LENGTH_SHORT).show()
                 }
             } else {
-                val user = User(
+                val user = UserLocal(
                     userList[selectedPosition].id,
                     username,
                     password,
@@ -152,9 +152,9 @@ class UsersFragment : Fragment() {
         return when (item.itemId) {
             101 -> {
                 val user = userList[item.groupId] // Ambil user berdasarkan groupId
-                val result = user.id?.let { dbHelper.deleteUser(it) } // Hanya panggil deleteUser jika id tidak null
+                val result = dbHelper.deleteUser(user.id)
 
-                if (result != null && result > 0) {
+                if (result > 0) {
                     loadUserData()
                     Toast.makeText(requireContext(), "User berhasil dihapus", Toast.LENGTH_SHORT).show()
                 } else {

@@ -9,7 +9,7 @@ import hadi.veri.project1.models.Barang
 import hadi.veri.project1.models.Pesanan
 import hadi.veri.project1.models.TipeTransaksi
 import hadi.veri.project1.models.TransaksiStok
-import hadi.veri.project1.models.User
+import hadi.veri.project1.models.UserLocal
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -418,7 +418,7 @@ class DBHelper(private val mContext: Context) : SQLiteOpenHelper(mContext, DATAB
 
     // ======== OPERASI CRUD UNTUK USERS ========
 
-    fun registerUser(user: User): Long {
+    fun registerUser(user: UserLocal): Long {
         val db = this.writableDatabase
         val values = ContentValues().apply {
             put(COLUMN_USERNAME, user.username)
@@ -447,7 +447,7 @@ class DBHelper(private val mContext: Context) : SQLiteOpenHelper(mContext, DATAB
         return role
     }
 
-    fun loginUser(username: String, password: String): User? {
+    fun loginUser(username: String, password: String): UserLocal? {
         val db = this.readableDatabase
 
         // Debug: Log info untuk troubleshooting
@@ -489,14 +489,14 @@ class DBHelper(private val mContext: Context) : SQLiteOpenHelper(mContext, DATAB
         // Debug: Log info rows returned
         android.util.Log.d("DBHelper", "Login query result rows: ${cursorLogin.count}")
 
-        var user: User? = null
+        var user: UserLocal? = null
 
         if (cursorLogin.moveToFirst()) {
             val id = cursorLogin.getInt(cursorLogin.getColumnIndexOrThrow(COLUMN_ID_USER))
             val jenisKelamin = cursorLogin.getString(cursorLogin.getColumnIndexOrThrow(COLUMN_JENIS_KELAMIN))
             val role = cursorLogin.getString(cursorLogin.getColumnIndexOrThrow(COLUMN_ROLE))
 
-            user = User(id, username, password, jenisKelamin, role)
+            user = UserLocal(id, username, password, jenisKelamin, role)
             android.util.Log.d("DBHelper", "Login success: user found - ${user.username}, role=${user.role}")
         } else {
             android.util.Log.d("DBHelper", "Login failed: user not found")
@@ -508,8 +508,8 @@ class DBHelper(private val mContext: Context) : SQLiteOpenHelper(mContext, DATAB
     }
 
 
-    fun getAllUsers(): List<User> {
-        val userList = mutableListOf<User>()
+    fun getAllUsers(): List<UserLocal> {
+        val userList = mutableListOf<UserLocal>()
         val db = this.readableDatabase
 
         // Cek apakah tabel users sudah ada
@@ -545,7 +545,7 @@ class DBHelper(private val mContext: Context) : SQLiteOpenHelper(mContext, DATAB
                 val jenisKelamin = cursorUsers.getString(cursorUsers.getColumnIndexOrThrow(COLUMN_JENIS_KELAMIN))
                 val role = cursorUsers.getString(cursorUsers.getColumnIndexOrThrow(COLUMN_ROLE))
 
-                val user = User(id, username, password, jenisKelamin, role)
+                val user = UserLocal(id, username, password, jenisKelamin, role)
                 userList.add(user)
             } while (cursorUsers.moveToNext())
         }
@@ -556,7 +556,7 @@ class DBHelper(private val mContext: Context) : SQLiteOpenHelper(mContext, DATAB
     }
 
 
-    fun updateUser(user: User): Int {
+    fun updateUser(user: UserLocal): Int {
         val db = this.writableDatabase
 
         // Cek apakah tabel users sudah ada

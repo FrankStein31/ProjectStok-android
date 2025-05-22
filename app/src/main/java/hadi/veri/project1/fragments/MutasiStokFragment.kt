@@ -11,14 +11,16 @@ import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 import hadi.veri.project1.R
-import hadi.veri.project1.adapters.TransaksiStokAdapter
-import hadi.veri.project1.database.DBHelper
+import hadi.veri.project1.adapters.StockMutationAdapter
 import hadi.veri.project1.databinding.FragmentMutasiStokBinding
-import hadi.veri.project1.models.Barang
-import hadi.veri.project1.models.TipeTransaksi
-import hadi.veri.project1.models.TransaksiStok
+import hadi.veri.project1.models.Product
+import hadi.veri.project1.models.StockMutation
+import hadi.veri.project1.viewmodels.ProductViewModel
+import hadi.veri.project1.viewmodels.StockMutationViewModel
+import hadi.veri.project1.viewmodels.ViewModelFactory
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -28,14 +30,15 @@ class MutasiStokFragment : Fragment() {
     private var _binding: FragmentMutasiStokBinding? = null
     private val binding get() = _binding!!
 
-    private lateinit var dbHelper: DBHelper
-    private lateinit var adapter: TransaksiStokAdapter
-    private var transaksiList = mutableListOf<TransaksiStok>()
+    private lateinit var stockMutationViewModel: StockMutationViewModel
+    private lateinit var productViewModel: ProductViewModel
+    private lateinit var adapter: StockMutationAdapter
 
-    private var selectedBarang: Barang? = null
+    private val stockMutationList = mutableListOf<StockMutation>()
+    private val productList = mutableListOf<Product>()
+    private var userRole: String? = null
+    private var selectedProductId: Int = 0
     private val calendar = Calendar.getInstance()
-    private val dateFormatter = SimpleDateFormat("dd-MM-yyyy", Locale("id"))
-    private val timeFormatter = SimpleDateFormat("HH:mm", Locale("id"))
 
     private val formatRupiah = NumberFormat.getCurrencyInstance(Locale("id", "ID"))
 
@@ -48,245 +51,236 @@ class MutasiStokFragment : Fragment() {
         savedInstanceState: Bundle?
     ): View {
         _binding = FragmentMutasiStokBinding.inflate(inflater, container, false)
+
+        // Ambil role dari arguments
+        arguments?.let {
+            userRole = it.getString("role")
+        }
+
+        // Inisialisasi ViewModel
+        val factory = ViewModelFactory.getInstance(requireContext())
+        stockMutationViewModel = ViewModelProvider(this, factory)[StockMutationViewModel::class.java]
+        productViewModel = ViewModelProvider(this, factory)[ProductViewModel::class.java]
+
         return binding.root
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        dbHelper = DBHelper(requireContext())
-        setupDateTimePickers()
-        setupBarangSearch()
-        setupRecyclerView()
-        setupDefaultValues()
-        setupStatusSpinner()
-        setupButtonListeners()
-        loadTransaksiData()
+        // Batasi akses berdasarkan role
+        if (userRole.equals("user", ignoreCase = true)) {
+            binding.btnTambah.visibility = View.GONE
+        }
 
-        // Set judul halaman dan tombol back
+        setupRecyclerView()
+        setupDatePickers()
+        setupSpinners()
+        observeViewModels()
+        loadProducts()
+
+        binding.btnTambah.setOnClickListener {
+            addStockMutation()
+        }
+
+        binding.btnFilter.setOnClickListener {
+            filterMutations()
+        }
+
+        // Set judul halaman
         (activity as? AppCompatActivity)?.supportActionBar?.apply {
-            title = "Mutasi Stock"
+            title = "Mutasi Stok"
             setDisplayHomeAsUpEnabled(true)
         }
     }
 
-    private fun setupButtonListeners() {
-        binding.btnSimpan.setOnClickListener {
-            simpanTransaksi()
-        }
-
-        binding.etCari.setOnFocusChangeListener { _, hasFocus ->
-            if (!hasFocus) {
-                filterTransaksi() // Panggil filterTransaksi saat fokus dari edit text hilang
+    private fun observeViewModels() {
+        // Observe products
+        productViewModel.products.observe(viewLifecycleOwner) { result ->
+            result.onSuccess { response ->
+                if (response.success && response.data != null) {
+                    productList.clear()
+                    productList.addAll(response.data)
+                    
+                    // Update spinner
+                    val productNames = listOf("Semua Barang") + productList.map { it.name }
+                    val spinnerAdapter = ArrayAdapter(
+                        requireContext(),
+                        android.R.layout.simple_spinner_item,
+                        productNames
+                    )
+                    spinnerAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+                    binding.spinnerBarang.adapter = spinnerAdapter
+                } else {
+                    Toast.makeText(requireContext(), response.message, Toast.LENGTH_SHORT).show()
+                }
+            }.onFailure { e ->
+                Toast.makeText(requireContext(), "Error: ${e.message}", Toast.LENGTH_SHORT).show()
             }
         }
-
-        // Menambahkan listener untuk checkbox Masuk dan Keluar
-        binding.checkboxMasuk.setOnCheckedChangeListener { _, _ ->
-            filterTransaksi() // Panggil filterTransaksi saat checkbox berubah
-        }
-
-        binding.checkboxKeluar.setOnCheckedChangeListener { _, _ ->
-            filterTransaksi() // Panggil filterTransaksi saat checkbox berubah
-        }
-    }
-
-    private fun filterTransaksi() {
-        val query = binding.etCari.text.toString()
-        val isMasukChecked = binding.checkboxMasuk.isChecked
-        val isKeluarChecked = binding.checkboxKeluar.isChecked
-
-        // Log untuk memeriksa apakah filterTransaksi dipanggil
-        Log.d("MutasiStokFragment", "filterTransaksi() called - Masuk: $isMasukChecked, Keluar: $isKeluarChecked")
-
-        // Filter transaksi berdasarkan tipe transaksi dan query pencarian
-        val filteredList = transaksiList.filter {
-            val isMasuk = it.tipeTransaksi == TipeTransaksi.MASUK
-            val isKeluar = it.tipeTransaksi == TipeTransaksi.KELUAR
-
-            val matchesTransaksi = when {
-                isMasukChecked && isMasuk -> true
-                isKeluarChecked && isKeluar -> true
-                else -> isMasuk || isKeluar // Jika tidak ada checkbox yang dipilih, tampilkan semua
+        
+        // Observe stock mutations
+        stockMutationViewModel.stockMutations.observe(viewLifecycleOwner) { result ->
+            result.onSuccess { response ->
+                if (response.success && response.data != null) {
+                    adapter.updateData(response.data)
+                } else {
+                    Toast.makeText(requireContext(), response.message, Toast.LENGTH_SHORT).show()
+                }
+            }.onFailure { e ->
+                Toast.makeText(requireContext(), "Error: ${e.message}", Toast.LENGTH_SHORT).show()
             }
-
-            matchesTransaksi && (it.kodeBarang.contains(query, ignoreCase = true) ||
-                    it.namaBarang.contains(query, ignoreCase = true))
         }
-
-        // Update recycler view dengan data yang sudah difilter
-        adapter.updateData(filteredList)
-    }
-
-    private fun setupDateTimePickers() {
-        // Setup tanggal
-        binding.etTanggal.setText(dateFormatter.format(calendar.time))
-        binding.etTanggal.setOnClickListener {
-            showDatePicker()
-        }
-
-        // Setup waktu
-        binding.etPukul.setText(timeFormatter.format(calendar.time))
-        binding.etPukul.setOnClickListener {
-            showTimePicker()
-        }
-    }
-
-    private fun showDatePicker() {
-        val year = calendar.get(Calendar.YEAR)
-        val month = calendar.get(Calendar.MONTH)
-        val day = calendar.get(Calendar.DAY_OF_MONTH)
-
-        DatePickerDialog(requireContext(), { _, selectedYear, selectedMonth, selectedDay ->
-            calendar.set(Calendar.YEAR, selectedYear)
-            calendar.set(Calendar.MONTH, selectedMonth)
-            calendar.set(Calendar.DAY_OF_MONTH, selectedDay)
-            binding.etTanggal.setText(dateFormatter.format(calendar.time))
-        }, year, month, day).show()
-    }
-
-    private fun showTimePicker() {
-        val hour = calendar.get(Calendar.HOUR_OF_DAY)
-        val minute = calendar.get(Calendar.MINUTE)
-
-        TimePickerDialog(requireContext(), { _, selectedHour, selectedMinute ->
-            calendar.set(Calendar.HOUR_OF_DAY, selectedHour)
-            calendar.set(Calendar.MINUTE, selectedMinute)
-            binding.etPukul.setText(timeFormatter.format(calendar.time))
-        }, hour, minute, true).show()
-    }
-
-    private fun setupBarangSearch() {
-        binding.etKodeBarang.setOnClickListener {
-            showBarangSearchDialog()
-        }
-    }
-
-    private fun showBarangSearchDialog() {
-        val barangList = dbHelper.getAllBarang()
-        if (barangList.isEmpty()) {
-            Toast.makeText(requireContext(), "Belum ada data barang", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        val dialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
-            .setTitle("Pilih Barang")
-            .setItems(barangList.map { "${it.kode} - ${it.nama}" }.toTypedArray()) { _, which ->
-                selectedBarang = barangList[which]
-                binding.etKodeBarang.setText(selectedBarang?.kode ?: "")
-                binding.etNamaBarang.setText(selectedBarang?.nama ?: "")
+        
+        // Observe create stock mutation result
+        stockMutationViewModel.createStockMutationResult.observe(viewLifecycleOwner) { result ->
+            result.onSuccess { response ->
+                if (response.success && response.data != null) {
+                    Toast.makeText(requireContext(), "Mutasi stok berhasil ditambahkan", Toast.LENGTH_SHORT).show()
+                    clearForm()
+                    loadStockMutations()
+                } else {
+                    Toast.makeText(requireContext(), response.message, Toast.LENGTH_SHORT).show()
+                }
+            }.onFailure { e ->
+                Toast.makeText(requireContext(), "Error: ${e.message}", Toast.LENGTH_SHORT).show()
             }
-            .setNegativeButton("Batal", null)
-            .create()
-        dialog.show()
+        }
     }
 
     private fun setupRecyclerView() {
-        adapter = TransaksiStokAdapter(transaksiList)
-        binding.rvMutasiStok.layoutManager = LinearLayoutManager(requireContext())
-        binding.rvMutasiStok.adapter = adapter
+        adapter = StockMutationAdapter(stockMutationList) { stockMutation ->
+            // Item click - tampilkan detail jika diperlukan
+            Toast.makeText(requireContext(), "Mutasi ID: ${stockMutation.id}", Toast.LENGTH_SHORT).show()
+        }
+        
+        binding.rvMutasi.layoutManager = LinearLayoutManager(requireContext())
+        binding.rvMutasi.adapter = adapter
     }
 
-    private fun setupDefaultValues() {
-        // Default tanggal dan waktu ke hari ini
-        binding.etTanggal.setText(dateFormatter.format(calendar.time))
-        binding.etPukul.setText(timeFormatter.format(calendar.time))
-
-        // Default radio button ke MASUK
-        binding.rbMasuk.isChecked = true
+    private fun setupDatePickers() {
+        val dateFormatter = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        
+        binding.etTanggal.setOnClickListener {
+            DatePickerDialog(requireContext(), { _, year, month, day ->
+                calendar.set(year, month, day)
+                binding.etTanggal.setText(dateFormatter.format(calendar.time))
+            }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH)).show()
+        }
+        
+        binding.etTanggalMulai.setOnClickListener {
+            DatePickerDialog(requireContext(), { _, year, month, day ->
+                calendar.set(year, month, day)
+                binding.etTanggalMulai.setText(dateFormatter.format(calendar.time))
+            }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH)).show()
+        }
+        
+        binding.etTanggalSelesai.setOnClickListener {
+            DatePickerDialog(requireContext(), { _, year, month, day ->
+                calendar.set(year, month, day)
+                binding.etTanggalSelesai.setText(dateFormatter.format(calendar.time))
+            }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH)).show()
+        }
+        
+        // Set tanggal hari ini sebagai default
+        binding.etTanggal.setText(dateFormatter.format(Calendar.getInstance().time))
     }
 
-    private fun setupStatusSpinner() {
-        val statusOptions = arrayOf("Pending", "Selesai")
-        val adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, statusOptions)
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        binding.spinnerStatus.adapter = adapter
+    private fun setupSpinners() {
+        // Spinner untuk tipe mutasi
+        val tipeList = listOf("Masuk", "Keluar")
+        val tipeAdapter = ArrayAdapter(
+            requireContext(),
+            android.R.layout.simple_spinner_item,
+            tipeList
+        )
+        tipeAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        binding.spinnerTipe.adapter = tipeAdapter
+        
+        // Spinner filter tipe
+        val filterTipeList = listOf("Semua Tipe", "Masuk", "Keluar")
+        val filterTipeAdapter = ArrayAdapter(
+            requireContext(),
+            android.R.layout.simple_spinner_item,
+            filterTipeList
+        )
+        filterTipeAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        binding.spinnerTipeFilter.adapter = filterTipeAdapter
     }
 
-    private fun loadTransaksiData() {
-        transaksiList.clear()
-        transaksiList.addAll(dbHelper.getAllTransaksiStok())
-        adapter.updateData(transaksiList)
+    private fun loadProducts() {
+        productViewModel.getAllProducts()
     }
 
-    private fun simpanTransaksi() {
-        if (selectedBarang == null) {
+    private fun loadStockMutations() {
+        stockMutationViewModel.getAllStockMutations()
+    }
+
+    private fun filterMutations() {
+        val productPosition = binding.spinnerBarang.selectedItemPosition
+        val productId = if (productPosition > 0 && productPosition <= productList.size) {
+            productList[productPosition - 1].id
+        } else null
+        
+        val typePosition = binding.spinnerTipeFilter.selectedItemPosition
+        val type = when (typePosition) {
+            1 -> "in"
+            2 -> "out"
+            else -> null
+        }
+        
+        val startDate = binding.etTanggalMulai.text.toString().takeIf { it.isNotEmpty() }
+        val endDate = binding.etTanggalSelesai.text.toString().takeIf { it.isNotEmpty() }
+        
+        stockMutationViewModel.getAllStockMutations(productId, type, startDate, endDate)
+    }
+
+    private fun addStockMutation() {
+        val productPosition = binding.spinnerBarang.selectedItemPosition
+        if (productPosition <= 0 || productPosition > productList.size) {
             Toast.makeText(requireContext(), "Pilih barang terlebih dahulu", Toast.LENGTH_SHORT).show()
             return
         }
 
-        val jumlahStr = binding.etJumlah.text.toString().trim()
-        if (jumlahStr.isEmpty()) {
-            Toast.makeText(requireContext(), "Jumlah tidak boleh kosong", Toast.LENGTH_SHORT).show()
+        val product = productList[productPosition - 1]
+        val typeStr = binding.spinnerTipe.selectedItem.toString()
+        val type = if (typeStr == "Masuk") "in" else "out"
+        val quantityStr = binding.etJumlah.text.toString().trim()
+        val description = binding.etKeterangan.text.toString().trim()
+        val date = binding.etTanggal.text.toString().trim()
+        
+        if (quantityStr.isEmpty() || date.isEmpty()) {
+            Toast.makeText(requireContext(), "Jumlah dan tanggal harus diisi", Toast.LENGTH_SHORT).show()
             return
         }
 
         try {
-            val jumlah = jumlahStr.toInt()
-            if (jumlah <= 0) {
+            val quantity = quantityStr.toInt()
+            if (quantity <= 0) {
                 Toast.makeText(requireContext(), "Jumlah harus lebih dari 0", Toast.LENGTH_SHORT).show()
                 return
             }
 
-            // Cek untuk transaksi keluar
-            val tipeTransaksi = if (binding.rbMasuk.isChecked) TipeTransaksi.MASUK else TipeTransaksi.KELUAR
-
-            if (tipeTransaksi == TipeTransaksi.KELUAR && selectedBarang!!.jumlahStok < jumlah) {
-                Toast.makeText(requireContext(), "Stok tidak mencukupi", Toast.LENGTH_SHORT).show()
-                return
-            }
-
-            // Dapatkan data dari form
-            val idTransaksi = System.currentTimeMillis()
-            val kodeBarang = selectedBarang!!.kode
-            val namaBarang = selectedBarang!!.nama
-            val status = binding.spinnerStatus.selectedItem.toString()
-            val nilaiTransaksi = selectedBarang!!.harga * jumlah
-            val keterangan = if (tipeTransaksi == TipeTransaksi.MASUK)
-                "Stok masuk: $status"
-            else
-                "Stok keluar: $status"
-
-            val transaksi = TransaksiStok(
-                idTransaksi.toInt(),
-                kodeBarang,
-                namaBarang,
-                jumlah,
-                tipeTransaksi,
-                binding.etPukul.text.toString(),
-                calendar.time,
-                keterangan,
-                nilaiTransaksi
-            )
-
-            val result = dbHelper.insertTransaksiStok(transaksi)
-
-            if (result > 0) {
-                loadTransaksiData()
-                clearForm()
-                selectedBarang = null
-
-                Toast.makeText(requireContext(), "Transaksi berhasil disimpan", Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(requireContext(), "Gagal menyimpan transaksi", Toast.LENGTH_SHORT).show()
-            }
-
+            stockMutationViewModel.createStockMutation(product.id, type, quantity, date, description)
         } catch (e: Exception) {
-            Log.e("MutasiStokFragment", "Error saat menyimpan transaksi", e)
-            Toast.makeText(requireContext(), "Format input tidak valid", Toast.LENGTH_SHORT).show()
+            Toast.makeText(requireContext(), "Format jumlah tidak valid", Toast.LENGTH_SHORT).show()
         }
     }
 
     private fun clearForm() {
-        binding.etKodeBarang.text?.clear()
-        binding.etNamaBarang.text?.clear()
-        binding.etJumlah.text?.clear()
-        binding.rbMasuk.isChecked = true
-        binding.spinnerStatus.setSelection(0)
+        binding.spinnerBarang.setSelection(0)
+        binding.spinnerTipe.setSelection(0)
+        binding.etJumlah.text.clear()
+        binding.etKeterangan.text.clear()
+        // Tetapkan tanggal hari ini
+        binding.etTanggal.setText(SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Calendar.getInstance().time))
     }
 
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
+        
+        // Reset tombol back
+        (activity as? AppCompatActivity)?.supportActionBar?.setDisplayHomeAsUpEnabled(false)
     }
 }

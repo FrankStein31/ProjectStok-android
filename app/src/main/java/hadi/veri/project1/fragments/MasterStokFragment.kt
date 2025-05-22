@@ -1,35 +1,46 @@
 package hadi.veri.project1.fragments
 
-import android.R
+import android.app.Activity
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.provider.MediaStore
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ArrayAdapter
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.MultiFormatWriter
 import com.google.zxing.integration.android.IntentIntegrator
 import com.journeyapps.barcodescanner.BarcodeEncoder
-import hadi.veri.project1.adapters.BarangAdapter
-import hadi.veri.project1.database.DBHelper
+import hadi.veri.project1.R
+import hadi.veri.project1.adapters.ProductAdapter
 import hadi.veri.project1.databinding.FragmentMasterStokBinding
-import hadi.veri.project1.models.Barang
+import hadi.veri.project1.models.Product
+import hadi.veri.project1.viewmodels.ProductViewModel
+import hadi.veri.project1.viewmodels.ViewModelFactory
+import java.io.File
+import java.io.FileOutputStream
 
 class MasterStokFragment : Fragment() {
     private var _binding: FragmentMasterStokBinding? = null
     private val binding get() = _binding!!
     lateinit var intentIntegrator: IntentIntegrator
 
-    private lateinit var adapter: BarangAdapter
-    private val barangList = mutableListOf<Barang>()
+    private lateinit var adapter: ProductAdapter
+    private val productList = mutableListOf<Product>()
     private var selectedPosition = -1
-    private lateinit var dbHelper: DBHelper
     private var userRole: String? = null // Role pengguna
+    private var selectedImageUri: Uri? = null
+    private var selectedImageFile: File? = null
+    
+    private lateinit var viewModel: ProductViewModel
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -40,28 +51,34 @@ class MasterStokFragment : Fragment() {
 
         // Ambil role dari arguments
         arguments?.let {
-            userRole = it.getString("role") // Default ke "user" jika null
+            userRole = it.getString("role")
         }
+        
+        // Inisialisasi ViewModel
+        val factory = ViewModelFactory.getInstance(requireContext())
+        viewModel = ViewModelProvider(this, factory)[ProductViewModel::class.java]
+        
         return binding.root
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        dbHelper = DBHelper(requireContext())
+        
         // Log role untuk debugging
         Toast.makeText(requireContext(), "Role: $userRole", Toast.LENGTH_SHORT).show()
 
         // Batasi akses berdasarkan role
-        if (userRole.equals("User", ignoreCase = true)) {
+        if (userRole.equals("user", ignoreCase = true)) {
             binding.btnSimpan.visibility = View.GONE
             binding.btnHapus.visibility = View.GONE
             binding.btnUpdate.visibility = View.GONE
         }
+        
         setupRecyclerView()
         setupButtons()
         setupSpinner()
-        loadBarangData()
-
+        observeViewModel()
+        loadProductData()
 
         // Set judul halaman dan tombol back
         (activity as? AppCompatActivity)?.supportActionBar?.apply {
@@ -69,15 +86,77 @@ class MasterStokFragment : Fragment() {
             setDisplayHomeAsUpEnabled(true)
         }
     }
+    
+    private fun observeViewModel() {
+        // Observe products LiveData
+        viewModel.products.observe(viewLifecycleOwner) { result ->
+            result.onSuccess { response ->
+                if (response.success && response.data != null) {
+                    adapter.updateData(response.data)
+                } else {
+                    Toast.makeText(requireContext(), response.message, Toast.LENGTH_SHORT).show()
+                }
+            }.onFailure { e ->
+                Toast.makeText(requireContext(), "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+        
+        // Observe createProductResult LiveData
+        viewModel.createProductResult.observe(viewLifecycleOwner) { result ->
+            result.onSuccess { response ->
+                if (response.success && response.data != null) {
+                    Toast.makeText(requireContext(), "Produk berhasil disimpan", Toast.LENGTH_SHORT).show()
+                    clearForm()
+                    loadProductData()
+                } else {
+                    Toast.makeText(requireContext(), response.message, Toast.LENGTH_SHORT).show()
+                }
+            }.onFailure { e ->
+                Toast.makeText(requireContext(), "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+        
+        // Observe updateProductResult LiveData
+        viewModel.updateProductResult.observe(viewLifecycleOwner) { result ->
+            result.onSuccess { response ->
+                if (response.success && response.data != null) {
+                    Toast.makeText(requireContext(), "Produk berhasil diupdate", Toast.LENGTH_SHORT).show()
+                    clearForm()
+                    loadProductData()
+                    selectedPosition = -1
+                } else {
+                    Toast.makeText(requireContext(), response.message, Toast.LENGTH_SHORT).show()
+                }
+            }.onFailure { e ->
+                Toast.makeText(requireContext(), "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+        
+        // Observe deleteProductResult LiveData
+        viewModel.deleteProductResult.observe(viewLifecycleOwner) { result ->
+            result.onSuccess { response ->
+                if (response.success) {
+                    Toast.makeText(requireContext(), "Produk berhasil dihapus", Toast.LENGTH_SHORT).show()
+                    clearForm()
+                    loadProductData()
+                    selectedPosition = -1
+                } else {
+                    Toast.makeText(requireContext(), response.message, Toast.LENGTH_SHORT).show()
+                }
+            }.onFailure { e ->
+                Toast.makeText(requireContext(), "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     private fun setupSpinner() {
         // Daftar satuan
-        val satuanList = listOf("Kg", "Gram", "Liter")
+        val satuanList = listOf("pcs", "kg", "gram", "liter", "box", "lusin")
 
         // Buat adapter untuk spinner
         val spinnerAdapter = ArrayAdapter(
             requireContext(),
-            R.layout.simple_spinner_item,
+            android.R.layout.simple_spinner_item,
             satuanList
         )
         spinnerAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
@@ -95,16 +174,16 @@ class MasterStokFragment : Fragment() {
     }
 
     private fun setupRecyclerView() {
-        adapter = BarangAdapter(barangList) { barang ->
+        adapter = ProductAdapter(productList) { product ->
             // Item di klik, update form
-            binding.etKodeBarang.setText(barang.kode)
-            binding.etNamaBarang.setText(barang.nama)
-            binding.spinner.setSelection((binding.spinner.adapter as ArrayAdapter<String>).getPosition(barang.satuan))
-            binding.etJumlahStok.setText(barang.jumlahStok.toString())
-            binding.etHargaBarang.setText(barang.harga.toString())
+            binding.etKodeBarang.setText(product.code)
+            binding.etNamaBarang.setText(product.name)
+            binding.spinner.setSelection((binding.spinner.adapter as ArrayAdapter<String>).getPosition(product.unit))
+            binding.etJumlahStok.setText(product.stock.toString())
+            binding.etHargaBarang.setText(product.price.toString())
 
             // Simpan posisi untuk update/delete
-            selectedPosition = barangList.indexOf(barang)
+            selectedPosition = productList.indexOf(product)
         }
 
         binding.rvBarang.layoutManager = LinearLayoutManager(requireContext())
@@ -113,15 +192,15 @@ class MasterStokFragment : Fragment() {
 
     private fun setupButtons() {
         binding.btnSimpan.setOnClickListener {
-            saveBarang()
+            saveProduct()
         }
 
         binding.btnUpdate.setOnClickListener {
-            updateBarang()
+            updateProduct()
         }
 
         binding.btnHapus.setOnClickListener {
-            deleteBarang()
+            deleteProduct()
         }
 
         binding.btnScan.setOnClickListener {
@@ -146,15 +225,39 @@ class MasterStokFragment : Fragment() {
 
         binding.etCari.setOnFocusChangeListener { _, hasFocus ->
             if (!hasFocus) {
-                searchBarang(binding.etCari.text.toString())
+                searchProduct(binding.etCari.text.toString())
             }
         }
+        
+        binding.btnAddImage.setOnClickListener {
+            val intent = Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
+            imagePickerLauncher.launch(intent)
+        }
+    }
 
+    private val imagePickerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val data = result.data
+            if (data != null && data.data != null) {
+                selectedImageUri = data.data
+                binding.imageView2.setImageURI(selectedImageUri)
+                
+                // Convert URI to File
+                selectedImageUri?.let { uri ->
+                    val inputStream = requireContext().contentResolver.openInputStream(uri)
+                    val file = File(requireContext().cacheDir, "temp_image_${System.currentTimeMillis()}.jpg")
+                    val outputStream = FileOutputStream(file)
+                    inputStream?.copyTo(outputStream)
+                    inputStream?.close()
+                    outputStream.close()
+                    selectedImageFile = file
+                }
+            }
+        }
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-
 
         val result = IntentIntegrator.parseActivityResult(requestCode, resultCode, data)
         if (result != null) {
@@ -163,47 +266,42 @@ class MasterStokFragment : Fragment() {
                 val scannedData = result.contents.split(";")
 
                 if (scannedData.size >= 5) {
-                    val kode = scannedData[0].trim()
-                    val nama = scannedData[1].trim()
-                    val jumlahStr = scannedData[2].trim()
-                    val satuan = scannedData[3].trim()
-                    val hargaStr = scannedData[4].trim()
+                    val code = scannedData[0].trim()
+                    val name = scannedData[1].trim()
+                    val stockStr = scannedData[2].trim()
+                    val unit = scannedData[3].trim()
+                    val priceStr = scannedData[4].trim()
 
                     // Validasi
-                    if (kode.isEmpty() || nama.isEmpty() || jumlahStr.isEmpty() || satuan.isEmpty() || hargaStr.isEmpty()) {
+                    if (code.isEmpty() || name.isEmpty() || stockStr.isEmpty() || unit.isEmpty() || priceStr.isEmpty()) {
                         Toast.makeText(requireContext(), "Data QR Code Tidak Valid", Toast.LENGTH_SHORT).show()
                         return
                     }
 
                     try {
-                        val jumlah = jumlahStr.toInt()
-                        val harga = hargaStr.toDouble()
+                        val stock = stockStr.toInt()
+                        val price = priceStr.toDouble()
 
-                        // Insert
-                        val barang = Barang(kode, nama, satuan, jumlah, harga)
-
-                        // Validasi
-                        if (dbHelper.getBarangByKode(kode) == null) {
-                            val result = dbHelper.insertBarang(barang)
-                            if (result > 0) {
-                                loadBarangData() // Refresh the list
-                                Toast.makeText(requireContext(), "Barang berhasil ditambahkan dari QR Code", Toast.LENGTH_SHORT).show()
-                            } else {
-                                Toast.makeText(requireContext(), "Gagal menambahkan barang ke database", Toast.LENGTH_SHORT).show()
-                            }
-                        } else {
-                            Toast.makeText(requireContext(), "Kode barang sudah ada di database", Toast.LENGTH_SHORT).show()
-                        }
+                        // Isi form
+                        binding.etKodeBarang.setText(code)
+                        binding.etNamaBarang.setText(name)
+                        binding.etJumlahStok.setText(stock.toString())
+                        binding.etHargaBarang.setText(price.toString())
+                        
+                        // Coba set spinner
+                        val position = (binding.spinner.adapter as? ArrayAdapter<String>)?.getPosition(unit) ?: 0
+                        binding.spinner.setSelection(position)
+                        
+                        // Set TextViews
+                        binding.txKodeQR.text = code
+                        binding.txNamaQR.text = name
+                        binding.txJumlahQR.text = stockStr
+                        binding.txSatuanQR.text = unit
+                        binding.txHargaQR.text = priceStr
+                        
                     } catch (e: Exception) {
-                        Toast.makeText(requireContext(), "Format data tidak valid", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(requireContext(), "Format data tidak valid: ${e.message}", Toast.LENGTH_SHORT).show()
                     }
-
-                    // Set TextViews
-                    binding.txKodeQR.text = kode
-                    binding.txNamaQR.text = nama
-                    binding.txJumlahQR.text = jumlahStr
-                    binding.txSatuanQR.text = satuan
-                    binding.txHargaQR.text = hargaStr
                 } else {
                     Toast.makeText(requireContext(), "Format QR Code Tidak Valid", Toast.LENGTH_SHORT).show()
                 }
@@ -215,134 +313,108 @@ class MasterStokFragment : Fragment() {
         }
     }
 
-    private fun loadBarangData() {
-        barangList.clear()
-        val data = dbHelper.getAllBarang()
-        barangList.addAll(data)
-        adapter.notifyDataSetChanged()
+    private fun loadProductData() {
+        viewModel.getAllProducts()
     }
-
-    private fun saveBarang() {
-        val kode = binding.etKodeBarang.text.toString().trim()
-        val nama = binding.etNamaBarang.text.toString().trim()
-        val satuan = binding.spinner.selectedItem.toString()
-        val stokStr = binding.etJumlahStok.text.toString().trim()
-        val hargaStr = binding.etHargaBarang.text.toString().trim()
-
-        if (kode.isEmpty() || nama.isEmpty() || stokStr.isEmpty() || hargaStr.isEmpty()) {
-            Toast.makeText(requireContext(), "Semua field harus diisi", Toast.LENGTH_SHORT).show()
-            return
+    
+    private fun searchProduct(query: String) {
+        // Pencarian sederhana di list lokal
+        val filteredList = productList.filter { 
+            it.name.contains(query, ignoreCase = true) || 
+            it.code.contains(query, ignoreCase = true) 
         }
-
-        try {
-            val stok = stokStr.toInt()
-            val harga = hargaStr.toDouble()
-
-            // Cek jika kode sudah ada
-            if (dbHelper.getBarangByKode(kode) != null) {
-                Toast.makeText(requireContext(), "Kode barang sudah digunakan", Toast.LENGTH_SHORT).show()
-                return
-            }
-
-
-            val barang = Barang(kode, nama, satuan, stok, harga)
-            val result = dbHelper.insertBarang(barang)
-
-            if (result > 0) {
-                loadBarangData()
-                clearForm()
-                Toast.makeText(requireContext(), "Barang berhasil disimpan", Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(requireContext(), "Gagal menyimpan barang", Toast.LENGTH_SHORT).show()
-            }
-        } catch (e: Exception) {
-            Toast.makeText(requireContext(), "Format input tidak valid", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    private fun updateBarang() {
-        if (selectedPosition == -1) {
-            Toast.makeText(requireContext(), "Pilih barang terlebih dahulu", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        // Ambil barang berdasarkan posisi yang dipilih
-        val barang = barangList[selectedPosition]
-
-        val kode = binding.etKodeBarang.text.toString().trim()
-        val nama = binding.etNamaBarang.text.toString().trim()
-        val satuan = binding.spinner.selectedItem.toString() // Ambil satuan dari spinner
-        val stokStr = binding.etJumlahStok.text.toString().trim()
-        val hargaStr = binding.etHargaBarang.text.toString().trim()
-
-        if (kode.isEmpty() || nama.isEmpty() || stokStr.isEmpty() || hargaStr.isEmpty()) {
-            Toast.makeText(requireContext(), "Semua field harus diisi", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        try {
-            val stok = stokStr.toInt()
-            val harga = hargaStr.toDouble()
-
-            // Update data barang
-            val updatedBarang = Barang(kode, nama, satuan, stok, harga)
-            val result = dbHelper.updateBarang(updatedBarang)
-
-            if (result > 0) {
-                loadBarangData()
-                clearForm()
-                selectedPosition = -1
-                Toast.makeText(requireContext(), "Barang berhasil diupdate", Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(requireContext(), "Gagal mengupdate barang", Toast.LENGTH_SHORT).show()
-            }
-        } catch (e: Exception) {
-            Toast.makeText(requireContext(), "Format input tidak valid", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    private fun deleteBarang() {
-        if (selectedPosition == -1) {
-            Toast.makeText(requireContext(), "Pilih barang terlebih dahulu", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        val kode = binding.etKodeBarang.text.toString().trim()
-        val result = dbHelper.deleteBarang(kode)
-
-        if (result > 0) {
-            loadBarangData()
-            clearForm()
-            selectedPosition = -1
-            Toast.makeText(requireContext(), "Barang berhasil dihapus", Toast.LENGTH_SHORT).show()
-        } else {
-            Toast.makeText(requireContext(), "Gagal menghapus barang", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    private fun searchBarang(query: String) {
-        if (query.isEmpty()) {
-            loadBarangData()
-            return
-        }
-
-        val filteredList = barangList.filter {
-            it.kode.contains(query, ignoreCase = true) ||
-            it.nama.contains(query, ignoreCase = true)
-        }
-
         adapter.updateData(filteredList)
     }
 
-    private fun clearForm() {
-        binding.etKodeBarang.text?.clear()
-        binding.etNamaBarang.text?.clear()
-        binding.spinner.setSelection(0)
-        binding.etJumlahStok.text?.clear()
-        binding.etHargaBarang.text?.clear()
+    private fun saveProduct() {
+        val code = binding.etKodeBarang.text.toString().trim()
+        val name = binding.etNamaBarang.text.toString().trim()
+        val unit = binding.spinner.selectedItem.toString()
+        val stockStr = binding.etJumlahStok.text.toString().trim()
+        val priceStr = binding.etHargaBarang.text.toString().trim()
+
+        if (code.isEmpty() || name.isEmpty() || stockStr.isEmpty() || priceStr.isEmpty()) {
+            Toast.makeText(requireContext(), "Semua field harus diisi", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        try {
+            val stock = stockStr.toInt()
+            val price = priceStr.toDouble()
+            
+            // Panggil ViewModel untuk menyimpan produk
+            viewModel.createProduct(code, name, null, price, stock, unit, selectedImageFile)
+
+        } catch (e: Exception) {
+            Toast.makeText(requireContext(), "Format data tidak valid: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
     }
 
-    companion object {
-        fun newInstance() = MasterStokFragment()
+    private fun updateProduct() {
+        if (selectedPosition == -1) {
+            Toast.makeText(requireContext(), "Pilih produk terlebih dahulu", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val code = binding.etKodeBarang.text.toString().trim()
+        val name = binding.etNamaBarang.text.toString().trim()
+        val unit = binding.spinner.selectedItem.toString()
+        val stockStr = binding.etJumlahStok.text.toString().trim()
+        val priceStr = binding.etHargaBarang.text.toString().trim()
+
+        if (code.isEmpty() || name.isEmpty() || stockStr.isEmpty() || priceStr.isEmpty()) {
+            Toast.makeText(requireContext(), "Semua field harus diisi", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        try {
+            val stock = stockStr.toInt()
+            val price = priceStr.toDouble()
+
+            // Pastikan item dipilih
+            if (selectedPosition >= 0 && selectedPosition < productList.size) {
+                val product = productList[selectedPosition]
+                
+                // Update produk via ViewModel
+                viewModel.updateProduct(
+                    product.id, 
+                    code, 
+                    name, 
+                    null, 
+                    price, 
+                    stock, 
+                    unit, 
+                    selectedImageFile
+                )
+            }
+        } catch (e: Exception) {
+            Toast.makeText(requireContext(), "Format data tidak valid: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun deleteProduct() {
+        if (selectedPosition == -1) {
+            Toast.makeText(requireContext(), "Pilih produk terlebih dahulu", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // Pastikan item dipilih
+        if (selectedPosition >= 0 && selectedPosition < productList.size) {
+            val product = productList[selectedPosition]
+            
+            // Delete produk via ViewModel
+            viewModel.deleteProduct(product.id)
+        }
+    }
+    
+    private fun clearForm() {
+        binding.etKodeBarang.text.clear()
+        binding.etNamaBarang.text.clear()
+        binding.etJumlahStok.text.clear()
+        binding.etHargaBarang.text.clear()
+        binding.spinner.setSelection(0)
+        binding.imageView2.setImageResource(R.drawable.ic_launcher_foreground)
+        selectedImageUri = null
+        selectedImageFile = null
     }
 }

@@ -1,157 +1,135 @@
 package hadi.veri.project1.fragments
 
 import android.os.Bundle
-import android.text.Editable
-import android.text.TextWatcher
-import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Button
-import android.widget.RadioGroup
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
-import com.google.android.material.textfield.TextInputEditText
-import hadi.veri.project1.R
-import hadi.veri.project1.adapters.PesananAdapter
-import hadi.veri.project1.database.DBHelper
+import hadi.veri.project1.adapters.OrderAdapter
 import hadi.veri.project1.databinding.FragmentPesananUserBinding
-import hadi.veri.project1.models.Pesanan
+import hadi.veri.project1.models.Order
+import hadi.veri.project1.viewmodels.OrderViewModel
+import hadi.veri.project1.viewmodels.ViewModelFactory
 
 class PesananUserFragment : Fragment() {
-    private lateinit var dbHelper: DBHelper
-    private lateinit var adapter: PesananAdapter
-    private var selectedId: Int? = null
-    private var userRole: String? = null // Role pengguna
-
-    private lateinit var binding: FragmentPesananUserBinding  // Gunakan view binding
-
-    companion object {
-        fun newInstance(): PesananUserFragment {
-            return PesananUserFragment()
-        }
-    }
+    private var _binding: FragmentPesananUserBinding? = null
+    private val binding get() = _binding!!
+    
+    private lateinit var orderViewModel: OrderViewModel
+    private lateinit var adapter: OrderAdapter
+    private val orderList = mutableListOf<Order>()
+    private var userRole: String? = null
 
     override fun onCreateView(
-        inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
-    ): View? {
-        binding = FragmentPesananUserBinding.inflate(inflater, container, false)
-
+        inflater: LayoutInflater, container: ViewGroup?,
+        savedInstanceState: Bundle?
+    ): View {
+        _binding = FragmentPesananUserBinding.inflate(inflater, container, false)
+        
         // Ambil role dari arguments
         arguments?.let {
-            userRole = it.getString("role") // Default ke "user" jika null
+            userRole = it.getString("role")
         }
+        
+        // Inisialisasi ViewModel
+        val factory = ViewModelFactory.getInstance(requireContext())
+        orderViewModel = ViewModelProvider(this, factory)[OrderViewModel::class.java]
+        
         return binding.root
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        dbHelper = DBHelper(requireContext())
-
-        // Batasi akses berdasarkan role
-        if (userRole.equals("User", ignoreCase = true)) {
-            binding.btnHapus.visibility = View.GONE
-            binding.btnUpdate.visibility = View.GONE
+        setupRecyclerView()
+        observeViewModel()
+        
+        // Tampilkan semua pesanan untuk admin, hanya pesanan sendiri untuk user
+        if (userRole.equals("admin", ignoreCase = true)) {
+            loadAllOrders()
+        } else {
+            loadMyOrders()
         }
 
-        adapter = PesananAdapter(listOf(), ::onDetailClicked, ::onProsesClicked, ::onHapusClicked)
-        binding.rvPesanan.layoutManager = LinearLayoutManager(requireContext())
-        binding.rvPesanan.adapter = adapter
-
-        // Set judul halaman dan tombol back
         (activity as? AppCompatActivity)?.supportActionBar?.apply {
-            title = "Pesanan User"
+            title = "Pesanan"
             setDisplayHomeAsUpEnabled(true)
         }
-
-        loadData()
-
-        binding.btnSimpan.setOnClickListener {
-            val pesanan = getInput()
-            if (pesanan.isValid()) {
-                dbHelper.insertPesanan(pesanan)
-                clearForm()
-                loadData()
-            } else {
-                Toast.makeText(requireContext(), "Data tidak lengkap!", Toast.LENGTH_SHORT).show()
-            }
-        }
-
-        binding.btnUpdate.setOnClickListener {
-            val id = selectedId ?: return@setOnClickListener
-            val pesanan = getInput().copy(id = id)
-            dbHelper.updatePesanan(pesanan)
-            clearForm()
-            loadData()
-        }
-
-        binding.btnHapus.setOnClickListener {
-            val id = selectedId ?: return@setOnClickListener
-            dbHelper.deletePesanan(id)
-            clearForm()
-            loadData()
-        }
-
-        // Cari pesanan berdasarkan nama atau kode barang
-        binding.etCari.addTextChangedListener(object : TextWatcher {
-            override fun afterTextChanged(s: Editable?) {
-                val keyword = s.toString()
-                val filteredList = dbHelper.getAllPesanan().filter {
-                    it.namaBarang.contains(keyword, ignoreCase = true) || it.kodeBarang.contains(keyword, ignoreCase = true)
+    }
+    
+    private fun observeViewModel() {
+        // Observe my orders (user)
+        orderViewModel.myOrders.observe(viewLifecycleOwner) { result ->
+            result.onSuccess { response ->
+                if (response.success && response.data != null) {
+                    adapter.updateData(response.data)
+                    toggleEmptyView(response.data.isEmpty())
+                } else {
+                    Toast.makeText(requireContext(), response.message, Toast.LENGTH_SHORT).show()
+                    toggleEmptyView(true)
                 }
-                adapter.updateData(filteredList)
+            }.onFailure { e ->
+                Toast.makeText(requireContext(), "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                toggleEmptyView(true)
             }
-
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-        })
+        }
+        
+        // Observe all orders (admin)
+        orderViewModel.orders.observe(viewLifecycleOwner) { result ->
+            result.onSuccess { response ->
+                if (response.success && response.data != null) {
+                    adapter.updateData(response.data)
+                    toggleEmptyView(response.data.isEmpty())
+                } else {
+                    Toast.makeText(requireContext(), response.message, Toast.LENGTH_SHORT).show()
+                    toggleEmptyView(true)
+                }
+            }.onFailure { e ->
+                Toast.makeText(requireContext(), "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                toggleEmptyView(true)
+            }
+        }
+    }
+    
+    private fun toggleEmptyView(isEmpty: Boolean) {
+        if (isEmpty) {
+            binding.rvPesanan.visibility = View.GONE
+            binding.emptyView.visibility = View.VISIBLE
+        } else {
+            binding.rvPesanan.visibility = View.VISIBLE
+            binding.emptyView.visibility = View.GONE
+        }
     }
 
-    private fun loadData() {
-        val pesananList = dbHelper.getAllPesanan()
-        adapter.updateData(pesananList)
+    private fun setupRecyclerView() {
+        adapter = OrderAdapter(orderList) { order ->
+            // Tampilkan detail pesanan ketika item di klik
+            Toast.makeText(requireContext(), "Pesanan #${order.order_number}", Toast.LENGTH_SHORT).show()
+            // Bisa ditambahkan navigasi ke halaman detail
+        }
+        
+        binding.rvPesanan.apply {
+            layoutManager = LinearLayoutManager(requireContext())
+            adapter = this@PesananUserFragment.adapter
+        }
+    }
+    
+    private fun loadMyOrders() {
+        orderViewModel.getMyOrders()
+    }
+    
+    private fun loadAllOrders() {
+        orderViewModel.getAllOrders()
     }
 
-    private fun getInput(): Pesanan {
-        val kode = binding.etKodeBarangPesanan.text.toString().trim()
-        val nama = binding.etNamaBarangPesanan.text.toString().trim()
-        val jumlahText = binding.etJumlahPesanan.text.toString().trim()
-        val jumlah = jumlahText.toIntOrNull() ?: 0
-
-        // Log untuk memastikan nilai jumlah
-        Log.d("PesananUserFragment", "Jumlah input: $jumlahText, hasil konversi: $jumlah")
-
-        val tipe = if (binding.radioGroupTipeTransaksiPesanan.checkedRadioButtonId == R.id.rbMasukPesanan) "Masuk" else "Keluar"
-        return Pesanan(0, kode, nama, jumlah, tipe)
-    }
-
-
-    private fun clearForm() {
-        binding.etKodeBarangPesanan.text?.clear()
-        binding.etNamaBarangPesanan.text?.clear()
-        binding.etJumlahPesanan.text?.clear()
-        binding.radioGroupTipeTransaksiPesanan.clearCheck()
-        selectedId = null
-    }
-
-    private fun onDetailClicked(pesanan: Pesanan) {
-        Toast.makeText(requireContext(), "Detail Pesanan: ${pesanan.jumlah}", Toast.LENGTH_SHORT).show()
-        // Implementasikan tampilan detail jika diperlukan
-    }
-
-    private fun onProsesClicked(pesanan: Pesanan) {
-        Toast.makeText(requireContext(), "Proses Pesanan: ${pesanan.tipeTransaksi}", Toast.LENGTH_SHORT).show()
-        // Implementasikan perubahan status jika diperlukan
-    }
-
-    private fun onHapusClicked(pesanan: Pesanan) {
-        dbHelper.deletePesanan(pesanan.id)
-        loadData()
-        Toast.makeText(requireContext(), "Pesanan Dihapus: ${pesanan.namaBarang}", Toast.LENGTH_SHORT).show()
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
+        (activity as? AppCompatActivity)?.supportActionBar?.setDisplayHomeAsUpEnabled(false)
     }
 }
 

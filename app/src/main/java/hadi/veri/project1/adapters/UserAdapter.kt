@@ -6,11 +6,11 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
 import hadi.veri.project1.databinding.ItemUserBinding
-import hadi.veri.project1.models.User
+import hadi.veri.project1.models.UserLocal
 
 class UserAdapter(
-    private val userList: List<User>,
-    private val onItemClick: (User) -> Unit
+    private val userList: List<UserLocal>,
+    private val onItemClick: (UserLocal) -> Unit
 ) : RecyclerView.Adapter<UserAdapter.UserViewHolder>() {
 
     inner class UserViewHolder(private val binding: ItemUserBinding) :
@@ -20,7 +20,7 @@ class UserAdapter(
             itemView.setOnCreateContextMenuListener(this)
         }
 
-        fun bind(user: User) {
+        fun bind(user: UserLocal) {
             binding.tvUsername.text = user.username
             binding.tvJenisKelamin.text = "Jenis Kelamin: ${user.jenisKelamin}"
             binding.tvRole.text = "Role: ${user.role}"
