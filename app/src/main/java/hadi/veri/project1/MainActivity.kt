@@ -6,11 +6,18 @@ import android.content.SharedPreferences
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
+import hadi.veri.project1.api.AuthApi
+import hadi.veri.project1.api.LogoutResponse
+import hadi.veri.project1.api.RetrofitClient
 import hadi.veri.project1.databinding.ActivityMainBinding
 import hadi.veri.project1.fragments.DataFragment
 import hadi.veri.project1.fragments.HomeFragment
+import retrofit2.Call
+import retrofit2.Callback
+import retrofit2.Response
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
@@ -79,15 +86,35 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun logout() {
-        val editor = sharedPreferences.edit()
-        editor.clear()
-        editor.apply()
+        val token = sharedPreferences.getString("token", null)
 
-        // Kembali ke WelcomeActivity
-        val intent = Intent(this, WelcomeActivity::class.java)
-        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-        startActivity(intent)
-        finish()
+        if (token == null) {
+            Toast.makeText(this, "Token tidak ditemukan", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val api = RetrofitClient.instance.create(AuthApi::class.java)
+        val call = api.logout("Bearer $token")
+
+        call.enqueue(object : Callback<LogoutResponse> {
+            override fun onResponse(call: Call<LogoutResponse>, response: Response<LogoutResponse>) {
+                if (response.isSuccessful) {
+                    // Hapus session dan redirect
+                    sharedPreferences.edit().clear().apply()
+
+                    val intent = Intent(this@MainActivity, WelcomeActivity::class.java)
+                    intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                    startActivity(intent)
+                    finish()
+                } else {
+                    Toast.makeText(this@MainActivity, "Logout gagal: ${response.message()}", Toast.LENGTH_SHORT).show()
+                }
+            }
+
+            override fun onFailure(call: Call<LogoutResponse>, t: Throwable) {
+                Toast.makeText(this@MainActivity, "Logout error: ${t.message}", Toast.LENGTH_SHORT).show()
+            }
+        })
     }
 
     private fun replaceFragment(fragment: Fragment) {

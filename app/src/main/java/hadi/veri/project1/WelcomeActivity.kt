@@ -23,17 +23,17 @@ class WelcomeActivity : AppCompatActivity() {
         supportActionBar?.title = "WELCOME"
         
         // Coba membuat database dengan memeriksa apakah tabel users sudah ada
-        val dbHelper = hadi.veri.project1.database.DBHelper(this)
-        val db = dbHelper.writableDatabase
-        
-        // Force upgrade database ke versi terbaru
-        try {
-            dbHelper.onUpgrade(db, 0, 1)
-        } catch (e: Exception) {
-            // Jika terjadi error, abaikan
-        }
-        
-        db.close()
+//        val dbHelper = hadi.veri.project1.database.DBHelper(this)
+//        val db = dbHelper.writableDatabase
+//
+//        // Force upgrade database ke versi terbaru
+//        try {
+//            dbHelper.onUpgrade(db, 0, 1)
+//        } catch (e: Exception) {
+//            // Jika terjadi error, abaikan
+//        }
+//
+//        db.close()
         
         sharedPreferences = getSharedPreferences("login_session", MODE_PRIVATE)
         
