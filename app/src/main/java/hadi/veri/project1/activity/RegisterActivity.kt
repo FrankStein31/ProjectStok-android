@@ -48,7 +48,7 @@ class RegisterActivity : AppCompatActivity() {
             val role = if (binding.rbAdmin.isChecked) "Admin" else "User"
             
             val user = User(
-                UUID.randomUUID().toString(),
+                0,
                 username,
                 password,
                 jenisKelamin,

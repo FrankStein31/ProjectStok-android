@@ -8,8 +8,4 @@
         android:id="@+id/navigation_data"
         android:icon="@drawable/ic_data"
         android:title="Data" />
-    <item
-        android:id="@+id/navigation_profile"
-        android:icon="@drawable/ic_profile"
-        android:title="Profile" />
 </menu>

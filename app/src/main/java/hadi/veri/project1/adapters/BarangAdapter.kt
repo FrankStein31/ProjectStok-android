@@ -3,7 +3,7 @@ package hadi.veri.project1.adapters
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
-import hadi.veri.project1.databinding.ItemBarangBinding
+import hadi.veri.project1.databinding.ItemMasterBinding
 import hadi.veri.project1.models.Barang
 import java.text.NumberFormat
 import java.util.Locale
@@ -13,16 +13,17 @@ class BarangAdapter(
     private val onItemClick: (Barang) -> Unit
 ) : RecyclerView.Adapter<BarangAdapter.BarangViewHolder>() {
 
-    inner class BarangViewHolder(private val binding: ItemBarangBinding) : RecyclerView.ViewHolder(binding.root) {
+    inner class BarangViewHolder(private val binding: ItemMasterBinding) : RecyclerView.ViewHolder(binding.root) {
         fun bind(barang: Barang) {
             binding.tvKodeBarang.text = barang.kode
             binding.tvNamaBarang.text = barang.nama
             binding.tvJumlahStok.text = barang.jumlahStok.toString()
-            
+            binding.tvSatuan.text = barang.satuan // Set satuan ke tvSatuan
+
             // Format harga ke Rupiah
             val formatRupiah = NumberFormat.getCurrencyInstance(Locale("id", "ID"))
-            binding.tvHargaBarang.text = formatRupiah.format(barang.harga)
-            
+            binding.tvHarga.text = formatRupiah.format(barang.harga)
+
             itemView.setOnClickListener {
                 onItemClick(barang)
             }
@@ -30,7 +31,7 @@ class BarangAdapter(
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): BarangViewHolder {
-        val binding = ItemBarangBinding.inflate(LayoutInflater.from(parent.context), parent, false)
+        val binding = ItemMasterBinding.inflate(LayoutInflater.from(parent.context), parent, false)
         return BarangViewHolder(binding)
     }
 
@@ -60,4 +61,4 @@ class BarangAdapter(
         barangList.removeAt(position)
         notifyItemRemoved(position)
     }
-} 
+}

@@ -43,36 +43,22 @@ class WelcomeActivity : AppCompatActivity() {
             finish()
         }
 
-        setupButtons()
     }
 
-    private fun setupButtons() {
-        binding.btnToLogin.setOnClickListener {
-            startActivity(Intent(this, LoginActivity::class.java))
-        }
-
-        binding.btnToRegister.setOnClickListener {
-            startActivity(Intent(this, RegisterActivity::class.java))
-        }
-    }
 
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
-        menuInflater.inflate(R.menu.welcome_menu, menu)
+        menuInflater.inflate(R.menu.main_options, menu)
         return true
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
-            R.id.menu_login -> {
+            R.id.nav_login -> {
                 startActivity(Intent(this, LoginActivity::class.java))
                 return true
             }
-            R.id.menu_register -> {
+            R.id.nav_signup -> {
                 startActivity(Intent(this, RegisterActivity::class.java))
-                return true
-            }
-            R.id.menu_home -> {
-                navigateToMain()
                 return true
             }
             else -> return super.onOptionsItemSelected(item)

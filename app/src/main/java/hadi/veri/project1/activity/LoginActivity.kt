@@ -6,7 +6,6 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import hadi.veri.project1.MainActivity
-import hadi.veri.project1.WelcomeActivity
 import hadi.veri.project1.database.DBHelper
 import hadi.veri.project1.databinding.ActivityLoginBinding
 
@@ -19,62 +18,38 @@ class LoginActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityLoginBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        
+
+        // Inisialisasi DBHelper dan SharedPreferences
         dbHelper = DBHelper(this)
         sharedPreferences = getSharedPreferences("login_session", MODE_PRIVATE)
-        
-        // Cek apakah sudah login
-        if (isLoggedIn()) {
-            navigateToMain()
-            finish()
-        }
-        
-        setupListeners()
-    }
-    
-    private fun setupListeners() {
-        binding.btnBack.setOnClickListener {
-            onBackPressed()
-        }
-        
+
+        // Aksi ketika tombol login ditekan
         binding.btnLogin.setOnClickListener {
             val username = binding.etUsername.text.toString().trim()
             val password = binding.etPassword.text.toString().trim()
-            
+
+            // Validasi input
             if (username.isEmpty() || password.isEmpty()) {
                 Toast.makeText(this, "Username dan password harus diisi", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-            
-            val user = dbHelper.loginUser(username, password)
-            if (user != null) {
-                // Simpan session login
+
+            // Cek login ke database
+            val role = dbHelper.getUserRole(username, password)
+            if (role != null) {
+                // Simpan role ke SharedPreferences
                 val editor = sharedPreferences.edit()
-                editor.putBoolean("is_logged_in", true)
-                editor.putString("username", user.username)
-                editor.putString("role", user.role)
+                editor.putString("role", role)
                 editor.apply()
-                
-                Toast.makeText(this, "Login berhasil sebagai ${user.role}", Toast.LENGTH_SHORT).show()
-                navigateToMain()
-                finish()
+
+                // Login berhasil, pindahkan ke MainActivity
+                val intent = Intent(this, MainActivity::class.java)
+                startActivity(intent)
+                finish() // Tutup LoginActivity agar tidak bisa kembali dengan tombol back
             } else {
-                Toast.makeText(this, "Username atau password salah", Toast.LENGTH_SHORT).show()
+                // Login gagal
+                Toast.makeText(this, "Login gagal. Periksa username dan password.", Toast.LENGTH_SHORT).show()
             }
         }
-        
-        binding.tvRegister.setOnClickListener {
-            startActivity(Intent(this, RegisterActivity::class.java))
-            finish()
-        }
     }
-    
-    private fun isLoggedIn(): Boolean {
-        return sharedPreferences.getBoolean("is_logged_in", false)
-    }
-    
-    private fun navigateToMain() {
-        val intent = Intent(this, MainActivity::class.java)
-        startActivity(intent)
-    }
-} 
+}

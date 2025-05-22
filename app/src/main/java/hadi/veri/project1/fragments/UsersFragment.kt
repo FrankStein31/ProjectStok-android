@@ -1,23 +1,22 @@
 package hadi.veri.project1.fragments
 
 import android.os.Bundle
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
+import android.view.*
 import android.widget.ArrayAdapter
 import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import hadi.veri.project1.adapters.UserAdapter
 import hadi.veri.project1.database.DBHelper
-import hadi.veri.project1.databinding.ActivityUsersBinding
+import hadi.veri.project1.databinding.FragmentUsersBinding
 import hadi.veri.project1.models.User
 import java.util.UUID
 
 class UsersFragment : Fragment() {
-    private var _binding: ActivityUsersBinding? = null
+    private var _binding: FragmentUsersBinding? = null
     private val binding get() = _binding!!
-    
+
     private lateinit var dbHelper: DBHelper
     private lateinit var adapter: UserAdapter
     private val userList = mutableListOf<User>()
@@ -28,18 +27,25 @@ class UsersFragment : Fragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        _binding = ActivityUsersBinding.inflate(inflater, container, false)
+        _binding = FragmentUsersBinding.inflate(inflater, container, false)
+        setHasOptionsMenu(true)
         return binding.root
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        
+
         dbHelper = DBHelper(requireContext())
-        
+
         setupRecyclerView()
         setupButtons()
         loadUserData()
+
+        // Set judul halaman dan tombol back
+        (activity as? AppCompatActivity)?.supportActionBar?.apply {
+            title = "Users"
+            setDisplayHomeAsUpEnabled(true)
+        }
     }
 
     private fun setupRecyclerView() {
@@ -48,66 +54,56 @@ class UsersFragment : Fragment() {
             onItemClick = { user ->
                 binding.etUsername.setText(user.username)
                 binding.etPassword.setText(user.password)
-                
+
                 if (user.jenisKelamin == "Laki-laki") {
                     binding.rbLaki.isChecked = true
                 } else {
                     binding.rbPerempuan.isChecked = true
                 }
-                
+
                 val rolePosition = when (user.role) {
                     "Admin" -> 0
                     "User" -> 1
                     else -> 0
                 }
                 binding.spinnerRole.setSelection(rolePosition)
-                
+
                 selectedPosition = userList.indexOf(user)
-            },
-            onDelete = { user ->
-                val result = dbHelper.deleteUser(user.id)
-                if (result > 0) {
-                    loadUserData()
-                    Toast.makeText(requireContext(), "User berhasil dihapus", Toast.LENGTH_SHORT).show()
-                } else {
-                    Toast.makeText(requireContext(), "Gagal menghapus user", Toast.LENGTH_SHORT).show()
-                }
             }
         )
-        
+
         binding.recyclerUserList.layoutManager = LinearLayoutManager(requireContext())
         binding.recyclerUserList.adapter = adapter
+        registerForContextMenu(binding.recyclerUserList)
     }
-    
+
     private fun setupButtons() {
         binding.btnSimpanUser.setOnClickListener {
             val username = binding.etUsername.text.toString().trim()
             val password = binding.etPassword.text.toString().trim()
-            
+
             if (username.isEmpty() || password.isEmpty()) {
                 Toast.makeText(requireContext(), "Username dan password harus diisi", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-            
+
             val jenisKelamin = if (binding.rbLaki.isChecked) "Laki-laki" else "Perempuan"
             val role = binding.spinnerRole.selectedItem.toString()
-            
+
             if (selectedPosition == -1) {
-                // Cek apakah username sudah ada
                 if (dbHelper.checkUsernameExists(username)) {
                     Toast.makeText(requireContext(), "Username sudah digunakan", Toast.LENGTH_SHORT).show()
                     return@setOnClickListener
                 }
-                
-                // Add new user
+
                 val user = User(
-                    UUID.randomUUID().toString(),
+                    null,
                     username,
                     password,
                     jenisKelamin,
                     role
                 )
-                
+
                 val result = dbHelper.registerUser(user)
                 if (result > 0) {
                     loadUserData()
@@ -117,7 +113,6 @@ class UsersFragment : Fragment() {
                     Toast.makeText(requireContext(), "Gagal menambahkan user", Toast.LENGTH_SHORT).show()
                 }
             } else {
-                // Update existing user
                 val user = User(
                     userList[selectedPosition].id,
                     username,
@@ -125,7 +120,7 @@ class UsersFragment : Fragment() {
                     jenisKelamin,
                     role
                 )
-                
+
                 val result = dbHelper.updateUser(user)
                 if (result > 0) {
                     loadUserData()
@@ -138,13 +133,13 @@ class UsersFragment : Fragment() {
             }
         }
     }
-    
+
     private fun loadUserData() {
         userList.clear()
         userList.addAll(dbHelper.getAllUsers())
         adapter.notifyDataSetChanged()
     }
-    
+
     private fun clearForm() {
         binding.etUsername.text?.clear()
         binding.etPassword.text?.clear()
@@ -152,6 +147,25 @@ class UsersFragment : Fragment() {
         binding.spinnerRole.setSelection(0)
         selectedPosition = -1
     }
+
+    override fun onContextItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            101 -> {
+                val user = userList[item.groupId] // Ambil user berdasarkan groupId
+                val result = user.id?.let { dbHelper.deleteUser(it) } // Hanya panggil deleteUser jika id tidak null
+
+                if (result != null && result > 0) {
+                    loadUserData()
+                    Toast.makeText(requireContext(), "User berhasil dihapus", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(requireContext(), "Gagal menghapus user", Toast.LENGTH_SHORT).show()
+                }
+                true
+            }
+            else -> super.onContextItemSelected(item)
+        }
+    }
+
 
     override fun onDestroyView() {
         super.onDestroyView()
@@ -161,4 +175,4 @@ class UsersFragment : Fragment() {
     companion object {
         fun newInstance() = UsersFragment()
     }
-} 
+}

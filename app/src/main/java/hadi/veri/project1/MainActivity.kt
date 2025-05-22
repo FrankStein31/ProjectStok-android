@@ -11,11 +11,11 @@ import androidx.fragment.app.Fragment
 import hadi.veri.project1.databinding.ActivityMainBinding
 import hadi.veri.project1.fragments.DataFragment
 import hadi.veri.project1.fragments.HomeFragment
-import hadi.veri.project1.fragments.ProfileFragment
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var sharedPreferences: SharedPreferences
+    private var userRole: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -23,10 +23,20 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         setSupportActionBar(binding.materialToolbar)
-        sharedPreferences = getSharedPreferences("login_session", MODE_PRIVATE)
-    
+
+        // Ambil SharedPreferences
+        sharedPreferences = getSharedPreferences("login_session", Context.MODE_PRIVATE)
+
+        // Ambil role dari SharedPreferences
+        userRole = sharedPreferences.getString("role", null)
+
+        // Log role untuk debugging
+        println("Role in MainActivity: $userRole")
+
+        // Tampilkan fragment awal (Home)
         replaceFragment(HomeFragment.newInstance())
-        
+
+        // Setup navigasi bottom menu
         binding.bottomNavigationView.setOnItemSelectedListener { item ->
             when (item.itemId) {
                 R.id.navigation_home -> {
@@ -36,12 +46,12 @@ class MainActivity : AppCompatActivity() {
                 }
                 R.id.navigation_data -> {
                     supportActionBar?.title = "Data Barang"
-                    replaceFragment(DataFragment.newInstance())
-                    true
-                }
-                R.id.navigation_profile -> {
-                    supportActionBar?.title = "Profil"
-                    replaceFragment(ProfileFragment.newInstance())
+                    // Teruskan role ke FragmentData
+                    val dataFragment = DataFragment.newInstance()
+                    val bundle = Bundle()
+                    bundle.putString("role", userRole)
+                    dataFragment.arguments = bundle
+                    replaceFragment(dataFragment)
                     true
                 }
                 else -> false
@@ -68,39 +78,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    override fun onBackPressed() {
-        val fragmentManager = supportFragmentManager
-        if (fragmentManager.backStackEntryCount > 0) {
-            fragmentManager.popBackStack()
-            
-            // Jika ada fragment di backstack, update judul sesuai dengan fragment yang ada
-            val currentFragment = fragmentManager.findFragmentById(R.id.frame_container)
-            
-            when (currentFragment) {
-                is HomeFragment -> {
-                    supportActionBar?.title = "Home"
-                    binding.bottomNavigationView.selectedItemId = R.id.navigation_home
-                }
-                is DataFragment -> {
-                    supportActionBar?.title = "Data Barang"
-                    binding.bottomNavigationView.selectedItemId = R.id.navigation_data
-                }
-                is ProfileFragment -> {
-                    supportActionBar?.title = "Profil"
-                    binding.bottomNavigationView.selectedItemId = R.id.navigation_profile
-                }
-            }
-        } else {
-            super.onBackPressed()
-        }
-    }
-
     private fun logout() {
         val editor = sharedPreferences.edit()
         editor.clear()
         editor.apply()
-        
-        // Kembali ke halaman Welcome
+
+        // Kembali ke WelcomeActivity
         val intent = Intent(this, WelcomeActivity::class.java)
         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         startActivity(intent)

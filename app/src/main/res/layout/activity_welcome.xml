@@ -60,36 +60,6 @@
                 android:textSize="16sp"
                 android:layout_marginBottom="32dp" />
 
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:layout_marginBottom="16dp">
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnToLogin"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Login"
-                    android:layout_marginEnd="8dp"
-                    android:paddingTop="12dp"
-                    android:paddingBottom="12dp"
-                    app:cornerRadius="8dp" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnToRegister"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Register"
-                    android:layout_marginStart="8dp"
-                    android:paddingTop="12dp"
-                    android:paddingBottom="12dp"
-                    app:cornerRadius="8dp"
-                    style="@style/Widget.MaterialComponents.Button.OutlinedButton" />
-            </LinearLayout>
-
             <androidx.cardview.widget.CardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

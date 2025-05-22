@@ -203,6 +203,19 @@
                         android:hint="Cari Barang" />
                 </com.google.android.material.textfield.TextInputLayout>
 
+                <CheckBox
+                    android:id="@+id/checkboxMasuk"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Masuk" />
+
+                <CheckBox
+                    android:id="@+id/checkboxKeluar"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Keluar" />
+
+
                 <androidx.recyclerview.widget.RecyclerView
                     android:id="@+id/rvMutasiStok"
                     android:layout_width="match_parent"

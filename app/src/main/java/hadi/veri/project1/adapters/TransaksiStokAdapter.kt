@@ -19,41 +19,49 @@ class TransaksiStokAdapter(
     private val formatRupiah = NumberFormat.getCurrencyInstance(Locale("id", "ID"))
     private val dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale("id"))
 
+    private var filteredTransaksiList = transaksiList
+
+    // ViewHolder untuk setiap item transaksi
     inner class TransaksiViewHolder(private val binding: ItemTransaksiStokBinding) : RecyclerView.ViewHolder(binding.root) {
         fun bind(transaksi: TransaksiStok) {
-            binding.tvIdTransaksi.text = transaksi.id
+            binding.tvIdTransaksi.text = "${transaksi.id}"
             binding.tvKodeBarang.text = transaksi.kodeBarang
             binding.tvNamaBarang.text = transaksi.namaBarang
             binding.tvJumlah.text = transaksi.jumlah.toString()
             binding.tvTanggal.text = dateFormat.format(transaksi.tanggal)
             binding.tvKeterangan.text = transaksi.keterangan
             binding.tvNilai.text = formatRupiah.format(transaksi.nilaiTransaksi)
-            
+            binding.tvPukul.text = transaksi.pukul
+
             val tipeText = if (transaksi.tipeTransaksi == TipeTransaksi.MASUK) "MASUK" else "KELUAR"
             binding.tvTipeTransaksi.text = tipeText
-            
-            val colorRes = if (transaksi.tipeTransaksi == TipeTransaksi.MASUK) 
+
+            val colorRes = if (transaksi.tipeTransaksi == TipeTransaksi.MASUK)
                 R.color.primary else R.color.error
-                
+
             binding.tvTipeTransaksi.setTextColor(
                 ContextCompat.getColor(itemView.context, colorRes)
             )
         }
     }
 
+    // Membuat ViewHolder untuk setiap item
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): TransaksiViewHolder {
         val binding = ItemTransaksiStokBinding.inflate(LayoutInflater.from(parent.context), parent, false)
         return TransaksiViewHolder(binding)
     }
 
-    override fun getItemCount(): Int = transaksiList.size
+    // Mengembalikan jumlah item dalam list transaksi
+    override fun getItemCount(): Int = filteredTransaksiList.size
 
+    // Mengikat data transaksi ke tampilan RecyclerView
     override fun onBindViewHolder(holder: TransaksiViewHolder, position: Int) {
-        holder.bind(transaksiList[position])
+        holder.bind(filteredTransaksiList[position])
     }
 
+    // Memperbarui data yang difilter pada adapter
     fun updateData(newList: List<TransaksiStok>) {
-        transaksiList = newList
-        notifyDataSetChanged()
+        filteredTransaksiList = newList
+        notifyDataSetChanged()  // Menyegarkan RecyclerView dengan data baru
     }
-} 
+}
