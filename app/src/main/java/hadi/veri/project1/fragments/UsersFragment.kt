@@ -1,17 +1,24 @@
 package hadi.veri.project1.fragments
 
+import android.content.Context
 import android.os.Bundle
-import android.view.*
-import android.widget.ArrayAdapter
+import android.view.LayoutInflater
+import android.view.MenuItem
+import android.view.View
+import android.view.ViewGroup
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import hadi.veri.project1.adapters.UserAdapter
+import hadi.veri.project1.api.RetrofitClient
+import hadi.veri.project1.api.SingleUserResponse
+import hadi.veri.project1.api.User
+import hadi.veri.project1.api.UserManageApi
+import hadi.veri.project1.api.UserResponse
 import hadi.veri.project1.database.DBHelper
 import hadi.veri.project1.databinding.FragmentUsersBinding
-import hadi.veri.project1.models.User
-import java.util.UUID
+import retrofit2.Call
 
 class UsersFragment : Fragment() {
     private var _binding: FragmentUsersBinding? = null
@@ -52,10 +59,14 @@ class UsersFragment : Fragment() {
         adapter = UserAdapter(
             userList,
             onItemClick = { user ->
-                binding.etUsername.setText(user.username)
-                binding.etPassword.setText(user.password)
+                binding.etUsername.setText(user.name)
+                binding.etEmail.setText(user.email)
+                binding.etPassword.setText("") // Kosongkan, demi keamanan
+                binding.etPhone.setText(user.phone ?: "")
+                binding.etAddress.setText(user.address ?: "")
 
-                if (user.jenisKelamin == "Laki-laki") {
+                // Jenis Kelamin
+                if (user.jenis_kelamin == "L") {
                     binding.rbLaki.isChecked = true
                 } else {
                     binding.rbPerempuan.isChecked = true
@@ -79,70 +90,179 @@ class UsersFragment : Fragment() {
 
     private fun setupButtons() {
         binding.btnSimpanUser.setOnClickListener {
-            val username = binding.etUsername.text.toString().trim()
+            val name = binding.etUsername.text.toString().trim()
+            val email = binding.etEmail.text.toString().trim()
             val password = binding.etPassword.text.toString().trim()
+            val phone = binding.etPhone.text.toString().trim()
+            val address = binding.etAddress.text.toString().trim()
+            val role = binding.spinnerRole.selectedItem.toString()
+            val jenisKelamin = if (binding.rbLaki.isChecked) "L" else "P"
 
-            if (username.isEmpty() || password.isEmpty()) {
-                Toast.makeText(requireContext(), "Username dan password harus diisi", Toast.LENGTH_SHORT).show()
+            if (name.isEmpty() || email.isEmpty() || password.isEmpty()) {
+                Toast.makeText(requireContext(), "Nama, email, dan password harus diisi", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
-            val jenisKelamin = if (binding.rbLaki.isChecked) "Laki-laki" else "Perempuan"
-            val role = binding.spinnerRole.selectedItem.toString()
+            val user = User(
+                id = if (selectedPosition == -1) null else userList[selectedPosition].id,
+                name = name,
+                email = email,
+                password = password,
+                role = role,
+                jenis_kelamin = jenisKelamin,
+                phone = phone.ifEmpty { null },
+                address = address.ifEmpty { null }
+            )
+
+            val sharedPreferences = requireContext().getSharedPreferences("login_session", Context.MODE_PRIVATE)
+            val token = sharedPreferences.getString("token", null)
+            if (token == null) {
+                Toast.makeText(requireContext(), "Token tidak ditemukan", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            val api = RetrofitClient.instance.create(UserManageApi::class.java)
 
             if (selectedPosition == -1) {
-                if (dbHelper.checkUsernameExists(username)) {
-                    Toast.makeText(requireContext(), "Username sudah digunakan", Toast.LENGTH_SHORT).show()
-                    return@setOnClickListener
+                // Tambah user
+                api.createUser("Bearer $token", user).enqueue(object : retrofit2.Callback<SingleUserResponse> {
+                    override fun onResponse(call: Call<SingleUserResponse>, response: retrofit2.Response<SingleUserResponse>) {
+                        if (response.isSuccessful && response.body()?.success == true) {
+                            loadUserData()
+                            clearForm()
+                            Toast.makeText(requireContext(), "User berhasil ditambahkan", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(requireContext(), "Gagal menambahkan user", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    override fun onFailure(call: Call<SingleUserResponse>, t: Throwable) {
+                        Toast.makeText(requireContext(), "Error: ${t.message}", Toast.LENGTH_SHORT).show()
+                    }
+                })
+            } else {
+                // Update user
+                val userId = userList[selectedPosition].id ?: return@setOnClickListener
+                api.updateUser("Bearer $token", userId, user).enqueue(object : retrofit2.Callback<SingleUserResponse> {
+                    override fun onResponse(call: Call<SingleUserResponse>, response: retrofit2.Response<SingleUserResponse>) {
+                        if (response.isSuccessful && response.body()?.success == true) {
+                            loadUserData()
+                            clearForm()
+                            selectedPosition = -1
+                            Toast.makeText(requireContext(), "User berhasil diupdate", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(requireContext(), "Gagal mengupdate user", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    override fun onFailure(call: Call<SingleUserResponse>, t: Throwable) {
+                        Toast.makeText(requireContext(), "Error: ${t.message}", Toast.LENGTH_SHORT).show()
+                    }
+                })
+            }
+        }
+    }
+
+    private fun loadUserData() {
+        val sharedPreferences = requireContext().getSharedPreferences("login_session", Context.MODE_PRIVATE)
+        val token = sharedPreferences.getString("token", null)
+        if (token == null) {
+            Toast.makeText(requireContext(), "Token tidak ditemukan", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val api = RetrofitClient.instance.create(UserManageApi::class.java)
+        api.getUsers("Bearer $token").enqueue(object : retrofit2.Callback<UserResponse> {
+            override fun onResponse(call: Call<UserResponse>, response: retrofit2.Response<UserResponse>) {
+                if (response.isSuccessful && response.body()?.data != null) {
+                    userList.clear()
+                    userList.addAll(response.body()!!.data!!)
+                    adapter.notifyDataSetChanged()
+                } else {
+                    Toast.makeText(requireContext(), "Gagal memuat user", Toast.LENGTH_SHORT).show()
                 }
+            }
+            override fun onFailure(call: Call<UserResponse>, t: Throwable) {
+                Toast.makeText(requireContext(), "Error: ${t.message}", Toast.LENGTH_SHORT).show()
+            }
+        })
+    }
 
-                val user = User(
-                    null,
-                    username,
-                    password,
-                    jenisKelamin,
-                    role
-                )
-
-                val result = dbHelper.registerUser(user)
-                if (result > 0) {
+    private fun addUser(user: User) {
+        val sharedPreferences = requireContext().getSharedPreferences("login_session", Context.MODE_PRIVATE)
+        val token = sharedPreferences.getString("token", null)
+        if (token == null) {
+            Toast.makeText(requireContext(), "Token tidak ditemukan", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val api = RetrofitClient.instance.create(UserManageApi::class.java)
+        api.createUser("Bearer $token", user).enqueue(object : retrofit2.Callback<SingleUserResponse> {
+            override fun onResponse(call: Call<SingleUserResponse>, response: retrofit2.Response<SingleUserResponse>) {
+                if (response.isSuccessful && response.body()?.success == true) {
                     loadUserData()
                     clearForm()
                     Toast.makeText(requireContext(), "User berhasil ditambahkan", Toast.LENGTH_SHORT).show()
                 } else {
                     Toast.makeText(requireContext(), "Gagal menambahkan user", Toast.LENGTH_SHORT).show()
                 }
-            } else {
-                val user = User(
-                    userList[selectedPosition].id,
-                    username,
-                    password,
-                    jenisKelamin,
-                    role
-                )
-
-                val result = dbHelper.updateUser(user)
-                if (result > 0) {
-                    loadUserData()
-                    clearForm()
-                    selectedPosition = -1
-                    Toast.makeText(requireContext(), "User berhasil diupdate", Toast.LENGTH_SHORT).show()
-                } else {
-                    Toast.makeText(requireContext(), "Gagal mengupdate user", Toast.LENGTH_SHORT).show()
-                }
             }
+            override fun onFailure(call: Call<SingleUserResponse>, t: Throwable) {
+                Toast.makeText(requireContext(), "Error: ${t.message}", Toast.LENGTH_SHORT).show()
+            }
+        })
+    }
+
+    private fun updateUser(user: User) {
+        val sharedPreferences = requireContext().getSharedPreferences("login_session", Context.MODE_PRIVATE)
+        val token = sharedPreferences.getString("token", null)
+        if (token == null) {
+            Toast.makeText(requireContext(), "Token tidak ditemukan", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val api = RetrofitClient.instance.create(UserManageApi::class.java)
+        user.id?.let {
+            api.updateUser("Bearer $token", it, user).enqueue(object : retrofit2.Callback<SingleUserResponse> {
+                override fun onResponse(call: Call<SingleUserResponse>, response: retrofit2.Response<SingleUserResponse>) {
+                    if (response.isSuccessful && response.body()?.success == true) {
+                        loadUserData()
+                        clearForm()
+                        Toast.makeText(requireContext(), "User berhasil diupdate", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(requireContext(), "Gagal mengupdate user", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                override fun onFailure(call: Call<SingleUserResponse>, t: Throwable) {
+                    Toast.makeText(requireContext(), "Error: ${t.message}", Toast.LENGTH_SHORT).show()
+                }
+            })
         }
     }
 
-    private fun loadUserData() {
-        userList.clear()
-        userList.addAll(dbHelper.getAllUsers())
-        adapter.notifyDataSetChanged()
+    private fun deleteUser(id: Int) {
+        val sharedPreferences = requireContext().getSharedPreferences("login_session", Context.MODE_PRIVATE)
+        val token = sharedPreferences.getString("token", null)
+        if (token == null) {
+            Toast.makeText(requireContext(), "Token tidak ditemukan", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val api = RetrofitClient.instance.create(UserManageApi::class.java)
+        api.deleteUser("Bearer $token", id).enqueue(object : retrofit2.Callback<SingleUserResponse> {
+            override fun onResponse(call: Call<SingleUserResponse>, response: retrofit2.Response<SingleUserResponse>) {
+                if (response.isSuccessful && response.body()?.success == true) {
+                    loadUserData()
+                    Toast.makeText(requireContext(), "User berhasil dihapus", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(requireContext(), "Gagal menghapus user", Toast.LENGTH_SHORT).show()
+                }
+            }
+            override fun onFailure(call: Call<SingleUserResponse>, t: Throwable) {
+                Toast.makeText(requireContext(), "Error: ${t.message}", Toast.LENGTH_SHORT).show()
+            }
+        })
     }
 
     private fun clearForm() {
         binding.etUsername.text?.clear()
+        binding.etEmail.text?.clear()
         binding.etPassword.text?.clear()
+        binding.etPhone.text?.clear()
+        binding.etAddress.text?.clear()
         binding.rbLaki.isChecked = true
         binding.spinnerRole.setSelection(0)
         selectedPosition = -1

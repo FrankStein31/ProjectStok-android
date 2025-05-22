@@ -5,8 +5,8 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
+import hadi.veri.project1.api.User
 import hadi.veri.project1.databinding.ItemUserBinding
-import hadi.veri.project1.models.User
 
 class UserAdapter(
     private val userList: List<User>,
@@ -21,8 +21,8 @@ class UserAdapter(
         }
 
         fun bind(user: User) {
-            binding.tvUsername.text = user.username
-            binding.tvJenisKelamin.text = "Jenis Kelamin: ${user.jenisKelamin}"
+            binding.tvUsername.text = user.name
+//            binding.tvJenisKelamin.text = "Jenis Kelamin: ${user.address}"
             binding.tvRole.text = "Role: ${user.role}"
 
             itemView.setOnClickListener {
