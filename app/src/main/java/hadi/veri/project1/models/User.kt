@@ -1,6 +1,6 @@
 package hadi.veri.project1.models
 
-data class User(
+data class UserLokal(
     val id: Int? = null,
     val username: String,
     val password: String,
