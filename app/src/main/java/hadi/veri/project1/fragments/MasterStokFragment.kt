@@ -1,6 +1,7 @@
 package hadi.veri.project1.fragments
 
 import android.R
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -16,9 +17,19 @@ import com.google.zxing.MultiFormatWriter
 import com.google.zxing.integration.android.IntentIntegrator
 import com.journeyapps.barcodescanner.BarcodeEncoder
 import hadi.veri.project1.adapters.BarangAdapter
+import hadi.veri.project1.api.Product
+import hadi.veri.project1.api.ProductApi
+import hadi.veri.project1.api.ProductResponse
+import hadi.veri.project1.api.RetrofitClient
 import hadi.veri.project1.database.DBHelper
 import hadi.veri.project1.databinding.FragmentMasterStokBinding
 import hadi.veri.project1.models.Barang
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.toRequestBody
+import retrofit2.Call
+import retrofit2.Callback
+import retrofit2.Response
 
 class MasterStokFragment : Fragment() {
     private var _binding: FragmentMasterStokBinding? = null
@@ -60,8 +71,8 @@ class MasterStokFragment : Fragment() {
         setupRecyclerView()
         setupButtons()
         setupSpinner()
-        loadBarangData()
-
+//        loadBarangData()
+        loadProductFromApi()
 
         // Set judul halaman dan tombol back
         (activity as? AppCompatActivity)?.supportActionBar?.apply {
@@ -180,7 +191,7 @@ class MasterStokFragment : Fragment() {
                         val harga = hargaStr.toDouble()
 
                         // Insert
-                        val barang = Barang(kode, nama, satuan, jumlah, harga)
+                        val barang = Barang(id, kode, nama, satuan, jumlah, harga)
 
                         // Validasi
                         if (dbHelper.getBarangByKode(kode) == null) {
@@ -222,6 +233,46 @@ class MasterStokFragment : Fragment() {
         adapter.notifyDataSetChanged()
     }
 
+    private fun loadProductFromApi() {
+        val sharedPreferences = requireContext().getSharedPreferences("login_session", Context.MODE_PRIVATE)
+        val token = sharedPreferences.getString("token", null)
+
+        if (token == null) {
+            Toast.makeText(context, "Token not found. Please login again.", Toast.LENGTH_LONG).show()
+            return
+        }
+
+        val productApi = RetrofitClient.instance.create(ProductApi::class.java)
+        productApi.getProducts("Bearer $token").enqueue(object : Callback<ProductResponse> {
+            override fun onResponse(call: Call<ProductResponse>, response: Response<ProductResponse>) {
+                if (response.isSuccessful && response.body() != null) {
+                    val products = response.body()!!.products
+                    // Konversi Product ke Barang jika perlu, atau gunakan Product langsung di adapter
+                    barangList.clear()
+                    products.forEach {
+                        barangList.add(
+                            Barang(
+                                id = it.id,
+                                kode = it.code,
+                                nama = it.name,
+                                satuan = it.unit,
+                                jumlahStok = it.stock,
+                                harga = it.price.toDoubleOrNull() ?: 0.0
+                            )
+                        )
+                    }
+                    adapter.notifyDataSetChanged()
+                } else {
+                    Toast.makeText(requireContext(), "Gagal memuat produk dari API", Toast.LENGTH_SHORT).show()
+                }
+            }
+
+            override fun onFailure(call: Call<ProductResponse>, t: Throwable) {
+                Toast.makeText(requireContext(), "Error: ${t.message}", Toast.LENGTH_SHORT).show()
+            }
+        })
+    }
+
     private fun saveBarang() {
         val kode = binding.etKodeBarang.text.toString().trim()
         val nama = binding.etNamaBarang.text.toString().trim()
@@ -238,23 +289,51 @@ class MasterStokFragment : Fragment() {
             val stok = stokStr.toInt()
             val harga = hargaStr.toDouble()
 
-            // Cek jika kode sudah ada
-            if (dbHelper.getBarangByKode(kode) != null) {
-                Toast.makeText(requireContext(), "Kode barang sudah digunakan", Toast.LENGTH_SHORT).show()
+            // Ambil token dari SharedPreferences
+            val sharedPreferences = requireContext().getSharedPreferences("login_session", Context.MODE_PRIVATE)
+            val token = sharedPreferences.getString("token", null)
+            if (token == null) {
+                Toast.makeText(requireContext(), "Token tidak ditemukan", Toast.LENGTH_SHORT).show()
                 return
             }
 
+            val api = RetrofitClient.instance.create(ProductApi::class.java)
 
-            val barang = Barang(kode, nama, satuan, stok, harga)
-            val result = dbHelper.insertBarang(barang)
+            // Siapkan data dalam bentuk RequestBody
+            val codeBody = kode.toRequestBody("text/plain".toMediaTypeOrNull())
+            val nameBody = nama.toRequestBody("text/plain".toMediaTypeOrNull())
+            val descBody = "".toRequestBody("text/plain".toMediaTypeOrNull()) // Provide empty description if needed
+            val priceBody = hargaStr.toRequestBody("text/plain".toMediaTypeOrNull())
+            val stockBody = stokStr.toRequestBody("text/plain".toMediaTypeOrNull())
+            val unitBody = satuan.toRequestBody("text/plain".toMediaTypeOrNull())
 
-            if (result > 0) {
-                loadBarangData()
-                clearForm()
-                Toast.makeText(requireContext(), "Barang berhasil disimpan", Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(requireContext(), "Gagal menyimpan barang", Toast.LENGTH_SHORT).show()
-            }
+            // Jika tidak ada gambar
+            val imagePart: MultipartBody.Part? = null
+
+            api.createProduct(
+                "Bearer $token", // Add the token with Bearer prefix
+                codeBody,
+                nameBody,
+                descBody,
+                priceBody,
+                stockBody,
+                unitBody,
+                imagePart
+            ).enqueue(object : Callback<Product> {
+                override fun onResponse(call: Call<Product>, response: Response<Product>) {
+                    if (response.isSuccessful) {
+                        clearForm()
+                        Toast.makeText(requireContext(), "Barang berhasil disimpan ke server", Toast.LENGTH_SHORT).show()
+                        loadProductFromApi() // Refresh list dari API
+                    } else {
+                        Toast.makeText(requireContext(), "Gagal simpan ke server: ${response.message()}", Toast.LENGTH_SHORT).show()
+                    }
+                }
+
+                override fun onFailure(call: Call<Product>, t: Throwable) {
+                    Toast.makeText(requireContext(), "Error: ${t.message}", Toast.LENGTH_SHORT).show()
+                }
+            })
         } catch (e: Exception) {
             Toast.makeText(requireContext(), "Format input tidak valid", Toast.LENGTH_SHORT).show()
         }
@@ -266,12 +345,11 @@ class MasterStokFragment : Fragment() {
             return
         }
 
-        // Ambil barang berdasarkan posisi yang dipilih
-        val barang = barangList[selectedPosition]
+        val selectedBarang = barangList[selectedPosition]
 
         val kode = binding.etKodeBarang.text.toString().trim()
         val nama = binding.etNamaBarang.text.toString().trim()
-        val satuan = binding.spinner.selectedItem.toString() // Ambil satuan dari spinner
+        val satuan = binding.spinner.selectedItem.toString()
         val stokStr = binding.etJumlahStok.text.toString().trim()
         val hargaStr = binding.etHargaBarang.text.toString().trim()
 
@@ -284,20 +362,48 @@ class MasterStokFragment : Fragment() {
             val stok = stokStr.toInt()
             val harga = hargaStr.toDouble()
 
-            // Update data barang
-            val updatedBarang = Barang(kode, nama, satuan, stok, harga)
-            val result = dbHelper.updateBarang(updatedBarang)
-
-            if (result > 0) {
-                loadBarangData()
-                clearForm()
-                selectedPosition = -1
-                Toast.makeText(requireContext(), "Barang berhasil diupdate", Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(requireContext(), "Gagal mengupdate barang", Toast.LENGTH_SHORT).show()
+            val sharedPreferences = requireContext().getSharedPreferences("login_session", Context.MODE_PRIVATE)
+            val token = sharedPreferences.getString("token", null)
+            if (token == null) {
+                Toast.makeText(requireContext(), "Token tidak ditemukan", Toast.LENGTH_SHORT).show()
+                return
             }
+
+            val api = RetrofitClient.instance.create(ProductApi::class.java)
+
+            // Buat Product baru dengan id yang sudah ada
+            val updatedProduct = Product(
+                id = selectedBarang.id, // <-- gunakan id di sini!
+                code = kode,
+                name = nama,
+                description = null,
+                price = harga.toString(),
+                stock = stok,
+                unit = satuan,
+                image = null,
+                created_at = null,
+                updated_at = null
+            )
+
+            api.updateProduct("Bearer $token", selectedBarang.id.toString(), updatedProduct)
+                .enqueue(object : Callback<Product> {
+                    override fun onResponse(call: Call<Product>, response: Response<Product>) {
+                        if (response.isSuccessful) {
+                            loadProductFromApi()
+                            clearForm()
+                            selectedPosition = -1
+                            Toast.makeText(requireContext(), "Barang berhasil diupdate di server", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(requireContext(), "Gagal update: ${response.message()}", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+
+                    override fun onFailure(call: Call<Product>, t: Throwable) {
+                        Toast.makeText(requireContext(), "Error: ${t.message}", Toast.LENGTH_SHORT).show()
+                    }
+                })
         } catch (e: Exception) {
-            Toast.makeText(requireContext(), "Format input tidak valid", Toast.LENGTH_SHORT).show()
+            Toast.makeText(requireContext(), "Format input tidak valid: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -307,17 +413,34 @@ class MasterStokFragment : Fragment() {
             return
         }
 
-        val kode = binding.etKodeBarang.text.toString().trim()
-        val result = dbHelper.deleteBarang(kode)
+        val selectedBarang = barangList[selectedPosition]
 
-        if (result > 0) {
-            loadBarangData()
-            clearForm()
-            selectedPosition = -1
-            Toast.makeText(requireContext(), "Barang berhasil dihapus", Toast.LENGTH_SHORT).show()
-        } else {
-            Toast.makeText(requireContext(), "Gagal menghapus barang", Toast.LENGTH_SHORT).show()
+        // Ambil token dari SharedPreferences
+        val sharedPreferences = requireContext().getSharedPreferences("login_session", Context.MODE_PRIVATE)
+        val token = sharedPreferences.getString("token", null)
+        if (token == null) {
+            Toast.makeText(requireContext(), "Token tidak ditemukan", Toast.LENGTH_SHORT).show()
+            return
         }
+
+        val api = RetrofitClient.instance.create(ProductApi::class.java)
+        api.deleteProduct("Bearer $token", selectedBarang.id.toString())
+            .enqueue(object : Callback<Void> {
+                override fun onResponse(call: Call<Void>, response: Response<Void>) {
+                    if (response.isSuccessful) {
+                        loadProductFromApi() // Refresh data dari server
+                        clearForm()
+                        selectedPosition = -1
+                        Toast.makeText(requireContext(), "Barang berhasil dihapus di server", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(requireContext(), "Gagal menghapus barang: ${response.message()}", Toast.LENGTH_SHORT).show()
+                    }
+                }
+
+                override fun onFailure(call: Call<Void>, t: Throwable) {
+                    Toast.makeText(requireContext(), "Error: ${t.message}", Toast.LENGTH_SHORT).show()
+                }
+            })
     }
 
     private fun searchBarang(query: String) {

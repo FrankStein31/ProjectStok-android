@@ -1,6 +1,7 @@
 package hadi.veri.project1.fragments
 
 import android.app.DatePickerDialog
+import android.content.Context
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -11,6 +12,11 @@ import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import hadi.veri.project1.R
 import hadi.veri.project1.adapters.TransaksiStokAdapter
+import hadi.veri.project1.api.ProductApi
+import hadi.veri.project1.api.ProductResponse
+import hadi.veri.project1.api.RetrofitClient
+import hadi.veri.project1.api.StockCardApi
+import hadi.veri.project1.api.StockCardResponse
 import hadi.veri.project1.database.DBHelper
 import hadi.veri.project1.databinding.FragmentCardStokBinding
 import hadi.veri.project1.models.Barang
@@ -136,27 +142,47 @@ class CardStokFragment : Fragment() {
             datePickerDialog.show()
         }
     }
-    
+
     private fun setupSearchBarang() {
         binding.etKodeBarang.setOnClickListener {
-            // Implementasi dialog pencarian barang
-            val barangList = dbHelper.getAllBarang()
-            if (barangList.isEmpty()) {
-                Toast.makeText(requireContext(), "Belum ada data barang", Toast.LENGTH_SHORT).show()
+            val sharedPreferences = requireContext().getSharedPreferences("login_session", Context.MODE_PRIVATE)
+            val token = sharedPreferences.getString("token", null)
+            if (token == null) {
+                Toast.makeText(requireContext(), "Token tidak ditemukan", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-            
-            // Bisa diganti dengan dialog atau fragment untuk memilih barang
-            val dialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
-                .setTitle("Pilih Barang")
-                .setItems(barangList.map { "${it.kode} - ${it.nama}" }.toTypedArray()) { _, which ->
-                    barangDipilih = barangList[which]
-                    binding.etKodeBarang.setText(barangDipilih?.kode ?: "")
-                    binding.etNamaBarang.setText(barangDipilih?.nama ?: "")
+
+            val api = RetrofitClient.instance.create(ProductApi::class.java)
+            api.getProducts("Bearer $token").enqueue(object : retrofit2.Callback<ProductResponse> {
+                override fun onResponse(call: retrofit2.Call<ProductResponse>, response: retrofit2.Response<ProductResponse>) {
+                    if (response.isSuccessful && response.body() != null && !response.body()!!.products.isNullOrEmpty()) {
+                        val barangList = response.body()!!.products
+                        val dialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                            .setTitle("Pilih Barang")
+                            .setItems(barangList.map { "${it.code} - ${it.name}" }.toTypedArray()) { _, which ->
+                                val selected = barangList[which]
+                                barangDipilih = Barang(
+                                    id = selected.id,
+                                    kode = selected.code,
+                                    nama = selected.name,
+                                    satuan = selected.unit,
+                                    jumlahStok = selected.stock,
+                                    harga = selected.price.toDoubleOrNull() ?: 0.0
+                                )
+                                binding.etKodeBarang.setText(barangDipilih?.kode ?: "")
+                                binding.etNamaBarang.setText(barangDipilih?.nama ?: "")
+                            }
+                            .setNegativeButton("Batal", null)
+                            .create()
+                        dialog.show()
+                    } else {
+                        Toast.makeText(requireContext(), "Tidak ada data barang di server", Toast.LENGTH_SHORT).show()
+                    }
                 }
-                .setNegativeButton("Batal", null)
-                .create()
-            dialog.show()
+                override fun onFailure(call: retrofit2.Call<ProductResponse>, t: Throwable) {
+                    Toast.makeText(requireContext(), "Gagal memuat data barang: ${t.message}", Toast.LENGTH_SHORT).show()
+                }
+            })
         }
     }
     
@@ -175,24 +201,64 @@ class CardStokFragment : Fragment() {
             loadLaporanKartuStok()
         }
     }
-    
+
     private fun loadLaporanKartuStok() {
-        // Ambil semua transaksi stok
-        val allTransaksi = dbHelper.getAllTransaksiStok()
-        
-        // Filter berdasarkan barang dan periode
-        transaksiList = allTransaksi.filter { transaksi ->
-            transaksi.kodeBarang == barangDipilih?.kode &&
-            !transaksi.tanggal.before(periodeAwal) &&
-            !transaksi.tanggal.after(periodeAkhir)
+        val sharedPreferences = requireContext().getSharedPreferences("login_session", Context.MODE_PRIVATE)
+        val token = sharedPreferences.getString("token", null)
+        if (token == null) {
+            Toast.makeText(requireContext(), "Token tidak ditemukan", Toast.LENGTH_SHORT).show()
+            return
         }
-        
-        if (transaksiList.isEmpty()) {
-            Toast.makeText(requireContext(), "Tidak ada data transaksi untuk periode ini", Toast.LENGTH_SHORT).show()
+        if (barangDipilih == null) {
+            Toast.makeText(requireContext(), "Pilih barang terlebih dahulu", Toast.LENGTH_SHORT).show()
+            return
         }
-        
-        // Update adapter
-        adapter = TransaksiStokAdapter(transaksiList)
-        binding.rvCardStock.adapter = adapter
+        if (periodeAwal == null || periodeAkhir == null) {
+            Toast.makeText(requireContext(), "Pilih periode terlebih dahulu", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // Format tanggal sesuai API (yyyy-MM-dd)
+        val dateFormatApi = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val startDate = dateFormatApi.format(periodeAwal!!)
+        val endDate = dateFormatApi.format(periodeAkhir!!)
+
+        val api = RetrofitClient.instance.create(StockCardApi::class.java)
+        api.getStockCards(
+            "Bearer $token",
+            barangDipilih!!.id,
+            startDate,
+            endDate
+        ).enqueue(object : retrofit2.Callback<StockCardResponse> {
+            override fun onResponse(call: retrofit2.Call<StockCardResponse>, response: retrofit2.Response<StockCardResponse>) {
+                if (response.isSuccessful && response.body() != null && response.body()!!.success) {
+                    val data = response.body()!!.data
+                    if (data.isEmpty()) {
+                        Toast.makeText(requireContext(), "Tidak ada data transaksi untuk periode ini", Toast.LENGTH_SHORT).show()
+                    }
+                    // Mapping StockCard ke TransaksiStok
+                    transaksiList = data.map {
+                        TransaksiStok(
+                            id = it.id,
+                            kodeBarang = barangDipilih!!.kode,
+                            namaBarang = barangDipilih!!.nama,
+                            jumlah = it.in_stock - it.out_stock, // atau sesuai kebutuhan
+                            tipeTransaksi = if (it.in_stock > 0) TipeTransaksi.MASUK else TipeTransaksi.KELUAR,
+                            pukul = "", // jika tidak ada jam di API
+                            tanggal = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(it.date) ?: Date(),
+                            keterangan = it.notes ?: "",
+                            nilaiTransaksi = it.product?.price?.toDoubleOrNull()?.times(it.in_stock - it.out_stock) ?: 0.0
+                        )
+                    }
+                    adapter = TransaksiStokAdapter(transaksiList)
+                    binding.rvCardStock.adapter = adapter
+                } else {
+                    Toast.makeText(requireContext(), "Gagal memuat kartu stok dari server", Toast.LENGTH_SHORT).show()
+                }
+            }
+            override fun onFailure(call: retrofit2.Call<StockCardResponse>, t: Throwable) {
+                Toast.makeText(requireContext(), "Error: ${t.message}", Toast.LENGTH_SHORT).show()
+            }
+        })
     }
 } 

@@ -2,6 +2,7 @@ package hadi.veri.project1.fragments
 
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
+import android.content.Context
 import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
@@ -14,11 +15,19 @@ import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import hadi.veri.project1.R
 import hadi.veri.project1.adapters.TransaksiStokAdapter
+import hadi.veri.project1.api.MutationApi
+import hadi.veri.project1.api.ProductApi
+import hadi.veri.project1.api.ProductResponse
+import hadi.veri.project1.api.RetrofitClient
+import hadi.veri.project1.api.StockMutation
+import hadi.veri.project1.api.StockMutationRequest
+import hadi.veri.project1.api.StockMutationResponse
 import hadi.veri.project1.database.DBHelper
 import hadi.veri.project1.databinding.FragmentMutasiStokBinding
 import hadi.veri.project1.models.Barang
 import hadi.veri.project1.models.TipeTransaksi
 import hadi.veri.project1.models.TransaksiStok
+import retrofit2.Call
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -163,22 +172,59 @@ class MutasiStokFragment : Fragment() {
     }
 
     private fun showBarangSearchDialog() {
-        val barangList = dbHelper.getAllBarang()
-        if (barangList.isEmpty()) {
-            Toast.makeText(requireContext(), "Belum ada data barang", Toast.LENGTH_SHORT).show()
+        // Ambil token dari SharedPreferences
+        val sharedPreferences = requireContext().getSharedPreferences("login_session", Context.MODE_PRIVATE)
+        val token = sharedPreferences.getString("token", null)
+        if (token == null) {
+            Toast.makeText(requireContext(), "Token tidak ditemukan", Toast.LENGTH_SHORT).show()
             return
         }
 
-        val dialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
-            .setTitle("Pilih Barang")
-            .setItems(barangList.map { "${it.kode} - ${it.nama}" }.toTypedArray()) { _, which ->
-                selectedBarang = barangList[which]
-                binding.etKodeBarang.setText(selectedBarang?.kode ?: "")
-                binding.etNamaBarang.setText(selectedBarang?.nama ?: "")
+        // Tampilkan loading dialog (optional)
+        val progressDialog = android.app.ProgressDialog(requireContext())
+        progressDialog.setMessage("Memuat data barang...")
+        progressDialog.setCancelable(false)
+        progressDialog.show()
+
+        // Panggil API
+        val api = RetrofitClient.instance.create(ProductApi::class.java)
+        api.getProducts("Bearer $token").enqueue(object : retrofit2.Callback<ProductResponse> {
+            override fun onResponse(
+                call: retrofit2.Call<ProductResponse>,
+                response: retrofit2.Response<ProductResponse>
+            ) {
+                progressDialog.dismiss()
+                if (response.isSuccessful && response.body() != null && !response.body()!!.products.isNullOrEmpty()) {
+                    val barangList = response.body()!!.products
+                    // Tampilkan dialog pilih barang
+                    val dialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                        .setTitle("Pilih Barang")
+                        .setItems(barangList.map { "${it.code} - ${it.name}" }.toTypedArray()) { _, which ->
+                            val selected = barangList[which]
+                            selectedBarang = Barang(
+                                id = selected.id,
+                                kode = selected.code,
+                                nama = selected.name,
+                                satuan = selected.unit,
+                                jumlahStok = selected.stock,
+                                harga = selected.price.toDoubleOrNull() ?: 0.0
+                            )
+                            binding.etKodeBarang.setText(selectedBarang?.kode ?: "")
+                            binding.etNamaBarang.setText(selectedBarang?.nama ?: "")
+                        }
+                        .setNegativeButton("Batal", null)
+                        .create()
+                    dialog.show()
+                } else {
+                    Toast.makeText(requireContext(), "Tidak ada data barang di server", Toast.LENGTH_SHORT).show()
+                }
             }
-            .setNegativeButton("Batal", null)
-            .create()
-        dialog.show()
+
+            override fun onFailure(call: retrofit2.Call<ProductResponse>, t: Throwable) {
+                progressDialog.dismiss()
+                Toast.makeText(requireContext(), "Gagal memuat data barang: ${t.message}", Toast.LENGTH_SHORT).show()
+            }
+        })
     }
 
     private fun setupRecyclerView() {
@@ -204,9 +250,43 @@ class MutasiStokFragment : Fragment() {
     }
 
     private fun loadTransaksiData() {
-        transaksiList.clear()
-        transaksiList.addAll(dbHelper.getAllTransaksiStok())
-        adapter.updateData(transaksiList)
+        val sharedPreferences = requireContext().getSharedPreferences("login_session", Context.MODE_PRIVATE)
+        val token = sharedPreferences.getString("token", null)
+        if (token == null) {
+            Toast.makeText(requireContext(), "Token tidak ditemukan", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val api = RetrofitClient.instance.create(MutationApi::class.java)
+        api.getStockMutations("Bearer $token").enqueue(object : retrofit2.Callback<StockMutationResponse> {
+            override fun onResponse(call: Call<StockMutationResponse>, response: retrofit2.Response<StockMutationResponse>) {
+                if (response.isSuccessful && response.body() != null && response.body()!!.success) {
+                    transaksiList.clear()
+                    val mutations = response.body()!!.data
+                    transaksiList.addAll(mutations.map {
+                        // Konversi ke TransaksiStok jika adapter lama pakai TransaksiStok
+                        TransaksiStok(
+                            id = it.id,
+                            kodeBarang = it.product?.code ?: "",
+                            namaBarang = it.product?.name ?: "",
+                            jumlah = it.quantity,
+                            tipeTransaksi = if (it.type == "in") TipeTransaksi.MASUK else TipeTransaksi.KELUAR,
+                            pukul = it.date.substring(11, 16), // ambil HH:mm dari ISO date
+                            tanggal = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(it.date) ?: Calendar.getInstance().time,
+                            keterangan = it.description ?: "",
+                            nilaiTransaksi = it.product?.price?.toDoubleOrNull()?.times(it.quantity) ?: 0.0
+                        )
+                    })
+                    adapter.updateData(transaksiList)
+                } else {
+                    Toast.makeText(requireContext(), "Gagal memuat mutasi stok", Toast.LENGTH_SHORT).show()
+                }
+            }
+
+            override fun onFailure(call: Call<StockMutationResponse>, t: Throwable) {
+                Toast.makeText(requireContext(), "Error: ${t.message}", Toast.LENGTH_SHORT).show()
+            }
+        })
     }
 
     private fun simpanTransaksi() {
@@ -214,7 +294,6 @@ class MutasiStokFragment : Fragment() {
             Toast.makeText(requireContext(), "Pilih barang terlebih dahulu", Toast.LENGTH_SHORT).show()
             return
         }
-
         val jumlahStr = binding.etJumlah.text.toString().trim()
         if (jumlahStr.isEmpty()) {
             Toast.makeText(requireContext(), "Jumlah tidak boleh kosong", Toast.LENGTH_SHORT).show()
@@ -228,51 +307,50 @@ class MutasiStokFragment : Fragment() {
                 return
             }
 
-            // Cek untuk transaksi keluar
-            val tipeTransaksi = if (binding.rbMasuk.isChecked) TipeTransaksi.MASUK else TipeTransaksi.KELUAR
-
-            if (tipeTransaksi == TipeTransaksi.KELUAR && selectedBarang!!.jumlahStok < jumlah) {
+            val tipeTransaksi = if (binding.rbMasuk.isChecked) "in" else "out"
+            if (tipeTransaksi == "out" && selectedBarang!!.jumlahStok < jumlah) {
                 Toast.makeText(requireContext(), "Stok tidak mencukupi", Toast.LENGTH_SHORT).show()
                 return
             }
 
-            // Dapatkan data dari form
-            val idTransaksi = System.currentTimeMillis()
-            val kodeBarang = selectedBarang!!.kode
-            val namaBarang = selectedBarang!!.nama
-            val status = binding.spinnerStatus.selectedItem.toString()
-            val nilaiTransaksi = selectedBarang!!.harga * jumlah
-            val keterangan = if (tipeTransaksi == TipeTransaksi.MASUK)
-                "Stok masuk: $status"
-            else
-                "Stok keluar: $status"
-
-            val transaksi = TransaksiStok(
-                idTransaksi.toInt(),
-                kodeBarang,
-                namaBarang,
-                jumlah,
-                tipeTransaksi,
-                binding.etPukul.text.toString(),
-                calendar.time,
-                keterangan,
-                nilaiTransaksi
-            )
-
-            val result = dbHelper.insertTransaksiStok(transaksi)
-
-            if (result > 0) {
-                loadTransaksiData()
-                clearForm()
-                selectedBarang = null
-
-                Toast.makeText(requireContext(), "Transaksi berhasil disimpan", Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(requireContext(), "Gagal menyimpan transaksi", Toast.LENGTH_SHORT).show()
+            val sharedPreferences = requireContext().getSharedPreferences("login_session", Context.MODE_PRIVATE)
+            val token = sharedPreferences.getString("token", null)
+            if (token == null) {
+                Toast.makeText(requireContext(), "Token tidak ditemukan", Toast.LENGTH_SHORT).show()
+                return
             }
 
+            // Format tanggal
+            val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(calendar.time)
+            val time = binding.etPukul.text.toString()
+            val dateTime = "$date $time:00"
+
+            val body = StockMutationRequest(
+                product_id = selectedBarang!!.id,
+                type = tipeTransaksi,
+                quantity = jumlah,
+                date = dateTime,
+                description = "${if (tipeTransaksi == "in") "Stok masuk" else "Stok keluar"}: ${binding.spinnerStatus.selectedItem}"
+            )
+
+            val api = RetrofitClient.instance.create(MutationApi::class.java)
+            api.createStockMutation("Bearer $token", body).enqueue(object : retrofit2.Callback<StockMutation> {
+                override fun onResponse(call: Call<StockMutation>, response: retrofit2.Response<StockMutation>) {
+                    if (response.isSuccessful) {
+                        loadTransaksiData()
+                        clearForm()
+                        selectedBarang = null
+                        Toast.makeText(requireContext(), "Transaksi berhasil disimpan ke server", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(requireContext(), "Gagal simpan ke server: ${response.message()}", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                override fun onFailure(call: Call<StockMutation>, t: Throwable) {
+                    Toast.makeText(requireContext(), "Error: ${t.message}", Toast.LENGTH_SHORT).show()
+                }
+            })
         } catch (e: Exception) {
-            Log.e("MutasiStokFragment", "Error saat menyimpan transaksi", e)
+            Log.e("MutasiStokFragment", "Error ${e.message}")
             Toast.makeText(requireContext(), "Format input tidak valid", Toast.LENGTH_SHORT).show()
         }
     }
