@@ -2,18 +2,24 @@ package hadi.veri.project1.database
 
 import android.content.ContentValues
 import android.content.Context
-import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import hadi.veri.project1.models.Barang
 import hadi.veri.project1.models.Pesanan
 import hadi.veri.project1.models.TipeTransaksi
 import hadi.veri.project1.models.TransaksiStok
-import hadi.veri.project1.models.User
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
+
+data class User(
+    val id: Int? = null,
+    val username: String,
+    val password: String,
+    val jenisKelamin: String,
+    val role: String
+)
 
 class DBHelper(private val mContext: Context) : SQLiteOpenHelper(mContext, DATABASE_NAME, null, DATABASE_VERSION) {
 
@@ -217,8 +223,8 @@ class DBHelper(private val mContext: Context) : SQLiteOpenHelper(mContext, DATAB
                 val jumlahStok = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_JUMLAH_STOK))
                 val harga = cursor.getDouble(cursor.getColumnIndexOrThrow(COLUMN_HARGA))
 
-                val barang = Barang(kode, nama, satuan, jumlahStok, harga)
-                barangList.add(barang)
+//                val barang = Barang(kode, nama, satuan, jumlahStok, harga)
+//                barangList.add(barang)
             } while (cursor.moveToNext())
         }
         cursor.close()
@@ -237,7 +243,7 @@ class DBHelper(private val mContext: Context) : SQLiteOpenHelper(mContext, DATAB
             val satuan = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_SATUAN))
             val jumlahStok = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_JUMLAH_STOK))
             val harga = cursor.getDouble(cursor.getColumnIndexOrThrow(COLUMN_HARGA))
-            barang = Barang(kode, nama, satuan, jumlahStok, harga)
+//            barang = Barang(kode, nama, satuan, jumlahStok, harga)
         }
         cursor.close()
         db.close()
@@ -288,8 +294,8 @@ class DBHelper(private val mContext: Context) : SQLiteOpenHelper(mContext, DATAB
                 TipeTransaksi.MASUK -> barang.jumlahStok + transaksi.jumlah
                 TipeTransaksi.KELUAR -> barang.jumlahStok - transaksi.jumlah
             }
-            val updatedBarang = Barang(barang.kode, barang.nama, barang.satuan, newStok, barang.harga)
-            updateBarang(updatedBarang)
+//            val updatedBarang = Barang(barang.kode, barang.nama, barang.satuan, newStok, barang.harga)
+//            updateBarang(updatedBarang)
         }
 
         db.close()
