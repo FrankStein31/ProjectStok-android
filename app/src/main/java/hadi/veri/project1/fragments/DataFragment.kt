@@ -37,6 +37,7 @@ class DataFragment : Fragment() {
             binding.cardHistory.visibility = View.GONE
             binding.cardInputBarang.visibility = View.GONE
             binding.cardUser.visibility = View.GONE
+            binding.cardDataBarang.visibility = View.GONE
         }
         setupCardClickListeners()
     }

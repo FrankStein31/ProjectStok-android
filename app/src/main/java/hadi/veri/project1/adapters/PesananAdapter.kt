@@ -16,6 +16,16 @@ class PesananAdapter(
     private val onHapusClicked: (Pesanan) -> Unit
 ) : RecyclerView.Adapter<PesananAdapter.PesananViewHolder>() {
 
+    // Untuk filter di fragment
+    fun updateData(newList: List<Pesanan>) {
+        pesananList = newList
+        notifyDataSetChanged()
+    }
+
+    // Jika ingin mengambil data terakhir yang ditampilkan di adapter (untuk filter)
+    val currentList: List<Pesanan>
+        get() = pesananList
+
     inner class PesananViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         val tvIdPesanan: TextView = itemView.findViewById(R.id.tvIdPesanan)
         val tvKodeBarang: TextView = itemView.findViewById(R.id.tvKodeBarangPesanan)
@@ -46,11 +56,4 @@ class PesananAdapter(
     }
 
     override fun getItemCount(): Int = pesananList.size
-
-    fun updateData(newList: List<Pesanan>) {
-        pesananList = newList
-        notifyDataSetChanged()
-    }
 }
-
-
