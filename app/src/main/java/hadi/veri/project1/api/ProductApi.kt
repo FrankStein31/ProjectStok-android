@@ -2,53 +2,184 @@ package hadi.veri.project1.api
 
 import android.os.Parcelable
 import kotlinx.parcelize.Parcelize
-import okhttp3.MultipartBody
-import okhttp3.RequestBody
-import retrofit2.Call
-import retrofit2.http.Body
-import retrofit2.http.DELETE
-import retrofit2.http.GET
-import retrofit2.http.Header
-import retrofit2.http.Multipart
-import retrofit2.http.POST
-import retrofit2.http.PUT
-import retrofit2.http.Part
-import retrofit2.http.Path
+import android.content.Context
+import com.google.gson.Gson
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import org.json.JSONObject
 
-interface ProductApi {
-    @GET("api/products")
+object ProductApi {
+    private val gson = Gson()
+
+    /**
+     * Mendapatkan daftar produk (GET /api/products)
+     */
     fun getProducts(
-        @Header("Authorization") token: String
-    ): Call<ProductResponse>
+        context: Context,
+        token: String,
+        onSuccess: (ProductResponse) -> Unit,
+        onError: (Exception) -> Unit
+    ) {
+        VolleyClient.initialize(context)
+        val endpoint = "api/products"
+        val headers = mapOf(
+            "Authorization" to token,
+            "Accept" to "application/json"
+        )
+        VolleyClient.get(
+            endpoint = endpoint,
+            headers = headers,
+            onSuccess = { response ->
+                try {
+                    val productResponse = gson.fromJson(response, ProductResponse::class.java)
+                    onSuccess(productResponse)
+                } catch (e: Exception) {
+                    onError(e)
+                }
+            },
+            onError = onError
+        )
+    }
 
-    @GET("api/products/{id}")
-    fun getProductById(@Path("id") id: String): Call<Product>
+    /**
+     * Mendapatkan produk berdasarkan ID (GET /api/products/{id})
+     */
+    fun getProductById(
+        context: Context,
+        id: String,
+        onSuccess: (Product) -> Unit,
+        onError: (Exception) -> Unit
+    ) {
+        VolleyClient.initialize(context)
+        val endpoint = "api/products/$id"
+        VolleyClient.get(
+            endpoint = endpoint,
+            onSuccess = { response ->
+                try {
+                    val product = gson.fromJson(response, Product::class.java)
+                    onSuccess(product)
+                } catch (e: Exception) {
+                    onError(e)
+                }
+            },
+            onError = onError
+        )
+    }
 
-    @Multipart
-    @POST("api/products")
+    /**
+     * Membuat produk baru (POST /api/products)
+     * Tidak mendukung multipart (image upload) pada contoh ini, hanya kirim field JSON saja.
+     */
     fun createProduct(
-        @Header("Authorization") token: String,
-        @Part("code") code: RequestBody,
-        @Part("name") name: RequestBody,
-        @Part("description") description: RequestBody?,
-        @Part("price") price: RequestBody,
-        @Part("stock") stock: RequestBody,
-        @Part("unit") unit: RequestBody,
-        @Part image: MultipartBody.Part?
-    ): Call<Product>
+        context: Context,
+        token: String,
+        product: Product,
+        onSuccess: (Product) -> Unit,
+        onError: (Exception) -> Unit
+    ) {
+        VolleyClient.initialize(context)
+        val endpoint = "api/products"
+        val headers = mapOf(
+            "Authorization" to token,
+            "Accept" to "application/json",
+            "Content-Type" to "application/json"
+        )
 
-    @PUT("api/products/{id}")
+        val params = JSONObject().apply {
+            put("code", product.code)
+            put("name", product.name)
+            put("description", product.description ?: JSONObject.NULL)
+            put("price", product.price)
+            put("stock", product.stock)
+            put("unit", product.unit)
+            // Untuk image multipart, perlu pengembangan custom jika ingin dukung upload file
+        }
+
+        VolleyClient.post(
+            endpoint = endpoint,
+            params = params,
+            headers = headers,
+            onSuccess = { response ->
+                try {
+                    val prod = gson.fromJson(response, Product::class.java)
+                    onSuccess(prod)
+                } catch (e: Exception) {
+                    onError(e)
+                }
+            },
+            onError = onError
+        )
+    }
+
+    /**
+     * Update produk dengan ID tertentu (PUT /api/products/{id})
+     */
     fun updateProduct(
-        @Header("Authorization") token: String,
-        @Path("id") id: String,
-        @Body product: Product
-    ): Call<Product>
+        context: Context,
+        token: String,
+        id: String,
+        product: Product,
+        onSuccess: (Product) -> Unit,
+        onError: (Exception) -> Unit
+    ) {
+        VolleyClient.initialize(context)
+        val endpoint = "api/products/$id"
+        val headers = mapOf(
+            "Authorization" to token,
+            "Accept" to "application/json",
+            "Content-Type" to "application/json"
+        )
+        val params = JSONObject().apply {
+            put("code", product.code)
+            put("name", product.name)
+            put("description", product.description ?: JSONObject.NULL)
+            put("price", product.price)
+            put("stock", product.stock)
+            put("unit", product.unit)
+            // Untuk image multipart, perlu pengembangan custom jika ingin dukung upload file
+        }
 
-    @DELETE("api/products/{id}")
+        // Untuk PUT, kamu perlu menambahkan method baru di VolleyClient atau lakukan override di post untuk method PUT
+        VolleyClient.put(
+            endpoint = endpoint,
+            params = params,
+            headers = headers,
+            onSuccess = { response ->
+                try {
+                    val prod = gson.fromJson(response, Product::class.java)
+                    onSuccess(prod)
+                } catch (e: Exception) {
+                    onError(e)
+                }
+            },
+            onError = onError
+        )
+    }
+
+    /**
+     * Menghapus produk berdasarkan ID (DELETE /api/products/{id})
+     */
     fun deleteProduct(
-        @Header("Authorization") token: String,
-        @Path("id") id: String
-    ): Call<Void>
+        context: Context,
+        token: String,
+        id: String,
+        onSuccess: () -> Unit,
+        onError: (Exception) -> Unit
+    ) {
+        VolleyClient.initialize(context)
+        val endpoint = "api/products/$id"
+        val headers = mapOf(
+            "Authorization" to token,
+            "Accept" to "application/json"
+        )
+        VolleyClient.delete(
+            endpoint = endpoint,
+            headers = headers,
+            onSuccess = {
+                onSuccess()
+            },
+            onError = onError
+        )
+    }
 }
 
 data class ProductResponse(

@@ -1,20 +1,58 @@
 package hadi.veri.project1.api
 
+import android.content.Context
 import android.os.Parcelable
-import kotlinx.android.parcel.Parcelize
-import retrofit2.Call
-import retrofit2.http.GET
-import retrofit2.http.Header
-import retrofit2.http.Query
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
+import kotlinx.parcelize.Parcelize
+import org.json.JSONObject
 
-interface StockCardApi {
-    @GET("api/stock-cards")
+object StockCardApi {
+    private val gson = Gson()
+
+    /**
+     * Mendapatkan daftar stock card berdasarkan productId, startDate, dan endDate, via Volley.
+     * @param context Context aplikasi.
+     * @param token Token autentikasi ("Bearer ...").
+     * @param productId ID produk yang dicari.
+     * @param startDate Tanggal awal (format: yyyy-MM-dd).
+     * @param endDate Tanggal akhir (format: yyyy-MM-dd).
+     * @param onSuccess Callback ketika sukses, dengan StockCardResponse.
+     * @param onError Callback ketika error.
+     */
     fun getStockCards(
-        @Header("Authorization") token: String,
-        @Query("product_id") productId: Int,
-        @Query("start_date") startDate: String,
-        @Query("end_date") endDate: String
-    ): Call<StockCardResponse>
+        context: Context,
+        token: String,
+        productId: Int,
+        startDate: String,
+        endDate: String,
+        onSuccess: (StockCardResponse) -> Unit,
+        onError: (Exception) -> Unit
+    ) {
+        VolleyClient.initialize(context)
+        val endpoint =
+            "api/stock-cards?product_id=$productId&start_date=$startDate&end_date=$endDate"
+
+        // Header untuk autentikasi
+        val headers = mapOf(
+            "Authorization" to token,
+            "Accept" to "application/json"
+        )
+
+        VolleyClient.get(
+            endpoint = endpoint,
+            headers = headers, // <- INI YANG MISSING!
+            onSuccess = { response ->
+                try {
+                    val stockCardResponse = gson.fromJson(response, StockCardResponse::class.java)
+                    onSuccess(stockCardResponse)
+                } catch (e: Exception) {
+                    onError(e)
+                }
+            },
+            onError = onError
+        )
+    }
 }
 
 @Parcelize
@@ -33,5 +71,5 @@ data class StockCard(
 data class StockCardResponse(
     val success: Boolean,
     val message: String,
-    val data: List<StockCard>
+    val data: List<StockCard>?
 )

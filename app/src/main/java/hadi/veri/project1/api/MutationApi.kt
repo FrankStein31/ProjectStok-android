@@ -1,25 +1,85 @@
 package hadi.veri.project1.api
 
-import android.os.Parcelable
-import kotlinx.android.parcel.Parcelize
-import retrofit2.Call
-import retrofit2.http.Body
-import retrofit2.http.GET
-import retrofit2.http.Header
-import retrofit2.http.POST
+import android.content.Context
+import com.google.gson.Gson
+import org.json.JSONObject
 
-interface MutationApi {
-    @GET("api/stock-mutations")
+object MutationApi {
+    private val gson = Gson()
+
+    /**
+     * Ambil daftar mutasi stok (GET /api/stock-mutations)
+     */
     fun getStockMutations(
-        @Header("Authorization") token: String
-    ): Call<StockMutationResponse>
+        context: Context,
+        token: String,
+        onSuccess: (StockMutationResponse) -> Unit,
+        onError: (Exception) -> Unit
+    ) {
+        VolleyClient.initialize(context)
+        val endpoint = "api/stock-mutations"
+        val headers = mapOf(
+            "Authorization" to token,
+            "Accept" to "application/json"
+        )
+        VolleyClient.get(
+            endpoint = endpoint,
+            headers = headers,
+            onSuccess = { response ->
+                try {
+                    val mutationResponse = gson.fromJson(response, StockMutationResponse::class.java)
+                    onSuccess(mutationResponse)
+                } catch (e: Exception) {
+                    onError(e)
+                }
+            },
+            onError = onError
+        )
+    }
 
-    @POST("api/stock-mutations")
+    /**
+     * Tambah mutasi stok (POST /api/stock-mutations)
+     */
     fun createStockMutation(
-        @Header("Authorization") token: String,
-        @Body body: StockMutationRequest
-    ): Call<StockMutation>
+        context: Context,
+        token: String,
+        body: StockMutationRequest,
+        onSuccess: (StockMutation) -> Unit,
+        onError: (Exception) -> Unit
+    ) {
+        VolleyClient.initialize(context)
+        val endpoint = "api/stock-mutations"
+        val headers = mapOf(
+            "Authorization" to token,
+            "Accept" to "application/json",
+            "Content-Type" to "application/json"
+        )
+        // Konversi body ke JSONObject
+        val params = JSONObject().apply {
+            put("product_id", body.product_id)
+            put("type", body.type)
+            put("quantity", body.quantity)
+            put("date", body.date)
+            put("description", body.description)
+        }
+        VolleyClient.post(
+            endpoint = endpoint,
+            params = params,
+            headers = headers,
+            onSuccess = { response ->
+                try {
+                    val mutation = gson.fromJson(response, StockMutation::class.java)
+                    onSuccess(mutation)
+                } catch (e: Exception) {
+                    onError(e)
+                }
+            },
+            onError = onError
+        )
+    }
 }
+
+// Data classes tetap sama, tidak perlu diubah
 
 data class StockMutationRequest(
     val product_id: Int,
@@ -35,7 +95,7 @@ data class StockMutationResponse(
     val data: List<StockMutation>
 )
 
-@Parcelize
+@kotlinx.parcelize.Parcelize
 data class StockMutation(
     val id: Int,
     val product_id: Int,
@@ -47,4 +107,4 @@ data class StockMutation(
     val description: String?,
     val user_id: Int? = null,
     val product: Product? = null
-): Parcelable
+) : android.os.Parcelable
