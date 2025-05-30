@@ -152,8 +152,6 @@ object UserManageApi {
     }
 }
 
-// Data classes - pastikan User disediakan/diimport sesuai kebutuhan proyek Anda
-
 data class UserResponse(
     val success: Boolean,
     val data: List<User>?

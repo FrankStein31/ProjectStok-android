@@ -33,7 +33,6 @@ object StockCardApi {
         val endpoint =
             "api/stock-cards?product_id=$productId&start_date=$startDate&end_date=$endDate"
 
-        // Header untuk autentikasi
         val headers = mapOf(
             "Authorization" to token,
             "Accept" to "application/json"
@@ -41,7 +40,7 @@ object StockCardApi {
 
         VolleyClient.get(
             endpoint = endpoint,
-            headers = headers, // <- INI YANG MISSING!
+            headers = headers,
             onSuccess = { response ->
                 try {
                     val stockCardResponse = gson.fromJson(response, StockCardResponse::class.java)

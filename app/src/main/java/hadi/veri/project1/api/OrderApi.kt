@@ -144,8 +144,6 @@ object OrderApi {
     }
 }
 
-// --- Data Classes (unchanged except Parcelize annotation) ---
-
 @kotlinx.parcelize.Parcelize
 data class Order(
     val id: Int,

@@ -1,10 +1,9 @@
 package hadi.veri.project1.api
 
-import android.os.Parcelable
-import kotlinx.parcelize.Parcelize
 import android.content.Context
+import android.os.Parcelable
 import com.google.gson.Gson
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import kotlinx.parcelize.Parcelize
 import org.json.JSONObject
 
 object ProductApi {

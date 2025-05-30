@@ -54,7 +54,7 @@ object MutationApi {
             "Accept" to "application/json",
             "Content-Type" to "application/json"
         )
-        // Konversi body ke JSONObject
+
         val params = JSONObject().apply {
             put("product_id", body.product_id)
             put("type", body.type)
@@ -79,8 +79,6 @@ object MutationApi {
     }
 }
 
-// Data classes tetap sama, tidak perlu diubah
-
 data class StockMutationRequest(
     val product_id: Int,
     val type: String,
@@ -99,11 +97,11 @@ data class StockMutationResponse(
 data class StockMutation(
     val id: Int,
     val product_id: Int,
-    val type: String, // "in" atau "out"
+    val type: String,
     val quantity: Int,
     val before_stock: Int,
     val after_stock: Int,
-    val date: String, // ISO (ex: "2024-06-01")
+    val date: String,
     val description: String?,
     val user_id: Int? = null,
     val product: Product? = null
