@@ -1,6 +1,7 @@
 package hadi.veri.project1.fragments
 
 import android.app.DatePickerDialog
+import android.app.ProgressDialog
 import android.app.TimePickerDialog
 import android.content.Context
 import android.os.Bundle
@@ -13,21 +14,17 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
-import hadi.veri.project1.R
 import hadi.veri.project1.adapters.TransaksiStokAdapter
 import hadi.veri.project1.api.MutationApi
 import hadi.veri.project1.api.ProductApi
+import hadi.veri.project1.api.Product
 import hadi.veri.project1.api.ProductResponse
-import hadi.veri.project1.api.RetrofitClient
-import hadi.veri.project1.api.StockMutation
 import hadi.veri.project1.api.StockMutationRequest
-import hadi.veri.project1.api.StockMutationResponse
 import hadi.veri.project1.database.DBHelper
 import hadi.veri.project1.databinding.FragmentMutasiStokBinding
 import hadi.veri.project1.models.Barang
 import hadi.veri.project1.models.TipeTransaksi
 import hadi.veri.project1.models.TransaksiStok
-import retrofit2.Call
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -45,7 +42,6 @@ class MutasiStokFragment : Fragment() {
     private val calendar = Calendar.getInstance()
     private val dateFormatter = SimpleDateFormat("dd-MM-yyyy", Locale("id"))
     private val timeFormatter = SimpleDateFormat("HH:mm", Locale("id"))
-
     private val formatRupiah = NumberFormat.getCurrencyInstance(Locale("id", "ID"))
 
     companion object {
@@ -80,24 +76,12 @@ class MutasiStokFragment : Fragment() {
     }
 
     private fun setupButtonListeners() {
-        binding.btnSimpan.setOnClickListener {
-            simpanTransaksi()
-        }
-
+        binding.btnSimpan.setOnClickListener { simpanTransaksi() }
         binding.etCari.setOnFocusChangeListener { _, hasFocus ->
-            if (!hasFocus) {
-                filterTransaksi() // Panggil filterTransaksi saat fokus dari edit text hilang
-            }
+            if (!hasFocus) filterTransaksi()
         }
-
-        // Menambahkan listener untuk checkbox Masuk dan Keluar
-        binding.checkboxMasuk.setOnCheckedChangeListener { _, _ ->
-            filterTransaksi() // Panggil filterTransaksi saat checkbox berubah
-        }
-
-        binding.checkboxKeluar.setOnCheckedChangeListener { _, _ ->
-            filterTransaksi() // Panggil filterTransaksi saat checkbox berubah
-        }
+        binding.checkboxMasuk.setOnCheckedChangeListener { _, _ -> filterTransaksi() }
+        binding.checkboxKeluar.setOnCheckedChangeListener { _, _ -> filterTransaksi() }
     }
 
     private fun filterTransaksi() {
@@ -105,10 +89,6 @@ class MutasiStokFragment : Fragment() {
         val isMasukChecked = binding.checkboxMasuk.isChecked
         val isKeluarChecked = binding.checkboxKeluar.isChecked
 
-        // Log untuk memeriksa apakah filterTransaksi dipanggil
-        Log.d("MutasiStokFragment", "filterTransaksi() called - Masuk: $isMasukChecked, Keluar: $isKeluarChecked")
-
-        // Filter transaksi berdasarkan tipe transaksi dan query pencarian
         val filteredList = transaksiList.filter {
             val isMasuk = it.tipeTransaksi == TipeTransaksi.MASUK
             val isKeluar = it.tipeTransaksi == TipeTransaksi.KELUAR
@@ -116,29 +96,20 @@ class MutasiStokFragment : Fragment() {
             val matchesTransaksi = when {
                 isMasukChecked && isMasuk -> true
                 isKeluarChecked && isKeluar -> true
-                else -> isMasuk || isKeluar // Jika tidak ada checkbox yang dipilih, tampilkan semua
+                else -> isMasuk || isKeluar
             }
 
             matchesTransaksi && (it.kodeBarang.contains(query, ignoreCase = true) ||
                     it.namaBarang.contains(query, ignoreCase = true))
         }
-
-        // Update recycler view dengan data yang sudah difilter
         adapter.updateData(filteredList)
     }
 
     private fun setupDateTimePickers() {
-        // Setup tanggal
         binding.etTanggal.setText(dateFormatter.format(calendar.time))
-        binding.etTanggal.setOnClickListener {
-            showDatePicker()
-        }
-
-        // Setup waktu
+        binding.etTanggal.setOnClickListener { showDatePicker() }
         binding.etPukul.setText(timeFormatter.format(calendar.time))
-        binding.etPukul.setOnClickListener {
-            showTimePicker()
-        }
+        binding.etPukul.setOnClickListener { showTimePicker() }
     }
 
     private fun showDatePicker() {
@@ -166,13 +137,10 @@ class MutasiStokFragment : Fragment() {
     }
 
     private fun setupBarangSearch() {
-        binding.etKodeBarang.setOnClickListener {
-            showBarangSearchDialog()
-        }
+        binding.etKodeBarang.setOnClickListener { showBarangSearchDialog() }
     }
 
     private fun showBarangSearchDialog() {
-        // Ambil token dari SharedPreferences
         val sharedPreferences = requireContext().getSharedPreferences("login_session", Context.MODE_PRIVATE)
         val token = sharedPreferences.getString("token", null)
         if (token == null) {
@@ -180,23 +148,18 @@ class MutasiStokFragment : Fragment() {
             return
         }
 
-        // Tampilkan loading dialog (optional)
-        val progressDialog = android.app.ProgressDialog(requireContext())
+        val progressDialog = ProgressDialog(requireContext())
         progressDialog.setMessage("Memuat data barang...")
         progressDialog.setCancelable(false)
         progressDialog.show()
 
-        // Panggil API
-        val api = RetrofitClient.instance.create(ProductApi::class.java)
-        api.getProducts("Bearer $token").enqueue(object : retrofit2.Callback<ProductResponse> {
-            override fun onResponse(
-                call: retrofit2.Call<ProductResponse>,
-                response: retrofit2.Response<ProductResponse>
-            ) {
+        ProductApi.getProducts(
+            context = requireContext(),
+            token = "Bearer $token",
+            onSuccess = { productResponse ->
                 progressDialog.dismiss()
-                if (response.isSuccessful && response.body() != null && !response.body()!!.products.isNullOrEmpty()) {
-                    val barangList = response.body()!!.products
-                    // Tampilkan dialog pilih barang
+                val barangList = productResponse.products
+                if (barangList.isNotEmpty()) {
                     val dialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
                         .setTitle("Pilih Barang")
                         .setItems(barangList.map { "${it.code} - ${it.name}" }.toTypedArray()) { _, which ->
@@ -218,13 +181,12 @@ class MutasiStokFragment : Fragment() {
                 } else {
                     Toast.makeText(requireContext(), "Tidak ada data barang di server", Toast.LENGTH_SHORT).show()
                 }
-            }
-
-            override fun onFailure(call: retrofit2.Call<ProductResponse>, t: Throwable) {
+            },
+            onError = { error ->
                 progressDialog.dismiss()
-                Toast.makeText(requireContext(), "Gagal memuat data barang: ${t.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(requireContext(), "Gagal memuat data barang: ${error.message}", Toast.LENGTH_SHORT).show()
             }
-        })
+        )
     }
 
     private fun setupRecyclerView() {
@@ -234,11 +196,8 @@ class MutasiStokFragment : Fragment() {
     }
 
     private fun setupDefaultValues() {
-        // Default tanggal dan waktu ke hari ini
         binding.etTanggal.setText(dateFormatter.format(calendar.time))
         binding.etPukul.setText(timeFormatter.format(calendar.time))
-
-        // Default radio button ke MASUK
         binding.rbMasuk.isChecked = true
     }
 
@@ -257,36 +216,31 @@ class MutasiStokFragment : Fragment() {
             return
         }
 
-        val api = RetrofitClient.instance.create(MutationApi::class.java)
-        api.getStockMutations("Bearer $token").enqueue(object : retrofit2.Callback<StockMutationResponse> {
-            override fun onResponse(call: Call<StockMutationResponse>, response: retrofit2.Response<StockMutationResponse>) {
-                if (response.isSuccessful && response.body() != null && response.body()!!.success) {
-                    transaksiList.clear()
-                    val mutations = response.body()!!.data
-                    transaksiList.addAll(mutations.map {
-                        // Konversi ke TransaksiStok jika adapter lama pakai TransaksiStok
-                        TransaksiStok(
-                            id = it.id,
-                            kodeBarang = it.product?.code ?: "",
-                            namaBarang = it.product?.name ?: "",
-                            jumlah = it.quantity,
-                            tipeTransaksi = if (it.type == "in") TipeTransaksi.MASUK else TipeTransaksi.KELUAR,
-                            pukul = it.date.substring(11, 16), // ambil HH:mm dari ISO date
-                            tanggal = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(it.date) ?: Calendar.getInstance().time,
-                            keterangan = it.description ?: "",
-                            nilaiTransaksi = it.product?.price?.toDoubleOrNull()?.times(it.quantity) ?: 0.0
-                        )
-                    })
-                    adapter.updateData(transaksiList)
-                } else {
-                    Toast.makeText(requireContext(), "Gagal memuat mutasi stok", Toast.LENGTH_SHORT).show()
-                }
+        MutationApi.getStockMutations(
+            context = requireContext(),
+            token = "Bearer $token",
+            onSuccess = { response ->
+                transaksiList.clear()
+                val mutations = response.data
+                transaksiList.addAll(mutations.map {
+                    TransaksiStok(
+                        id = it.id,
+                        kodeBarang = it.product?.code ?: "",
+                        namaBarang = it.product?.name ?: "",
+                        jumlah = it.quantity,
+                        tipeTransaksi = if (it.type == "in") TipeTransaksi.MASUK else TipeTransaksi.KELUAR,
+                        pukul = if (it.date.length >= 16) it.date.substring(11, 16) else "",
+                        tanggal = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(it.date.substring(0, 10)) ?: Calendar.getInstance().time,
+                        keterangan = it.description ?: "",
+                        nilaiTransaksi = it.product?.price?.toDoubleOrNull()?.times(it.quantity) ?: 0.0
+                    )
+                })
+                adapter.updateData(transaksiList)
+            },
+            onError = { error ->
+                Toast.makeText(requireContext(), "Gagal memuat mutasi stok: ${error.message}", Toast.LENGTH_SHORT).show()
             }
-
-            override fun onFailure(call: Call<StockMutationResponse>, t: Throwable) {
-                Toast.makeText(requireContext(), "Error: ${t.message}", Toast.LENGTH_SHORT).show()
-            }
-        })
+        )
     }
 
     private fun simpanTransaksi() {
@@ -320,7 +274,6 @@ class MutasiStokFragment : Fragment() {
                 return
             }
 
-            // Format tanggal
             val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(calendar.time)
             val time = binding.etPukul.text.toString()
             val dateTime = "$date $time:00"
@@ -333,22 +286,20 @@ class MutasiStokFragment : Fragment() {
                 description = "${if (tipeTransaksi == "in") "Stok masuk" else "Stok keluar"}: ${binding.spinnerStatus.selectedItem}"
             )
 
-            val api = RetrofitClient.instance.create(MutationApi::class.java)
-            api.createStockMutation("Bearer $token", body).enqueue(object : retrofit2.Callback<StockMutation> {
-                override fun onResponse(call: Call<StockMutation>, response: retrofit2.Response<StockMutation>) {
-                    if (response.isSuccessful) {
-                        loadTransaksiData()
-                        clearForm()
-                        selectedBarang = null
-                        Toast.makeText(requireContext(), "Transaksi berhasil disimpan ke server", Toast.LENGTH_SHORT).show()
-                    } else {
-                        Toast.makeText(requireContext(), "Gagal simpan ke server: ${response.message()}", Toast.LENGTH_SHORT).show()
-                    }
+            MutationApi.createStockMutation(
+                context = requireContext(),
+                token = "Bearer $token",
+                body = body,
+                onSuccess = {
+                    loadTransaksiData()
+                    clearForm()
+                    selectedBarang = null
+                    Toast.makeText(requireContext(), "Transaksi berhasil disimpan ke server", Toast.LENGTH_SHORT).show()
+                },
+                onError = { error ->
+                    Toast.makeText(requireContext(), "Gagal simpan ke server: ${error.message}", Toast.LENGTH_SHORT).show()
                 }
-                override fun onFailure(call: Call<StockMutation>, t: Throwable) {
-                    Toast.makeText(requireContext(), "Error: ${t.message}", Toast.LENGTH_SHORT).show()
-                }
-            })
+            )
         } catch (e: Exception) {
             Log.e("MutasiStokFragment", "Error ${e.message}")
             Toast.makeText(requireContext(), "Format input tidak valid", Toast.LENGTH_SHORT).show()

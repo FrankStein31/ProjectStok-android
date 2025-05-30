@@ -11,14 +11,12 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import hadi.veri.project1.adapters.UserAdapter
-import hadi.veri.project1.api.RetrofitClient
 import hadi.veri.project1.api.SingleUserResponse
 import hadi.veri.project1.api.User
 import hadi.veri.project1.api.UserManageApi
 import hadi.veri.project1.api.UserResponse
 import hadi.veri.project1.database.DBHelper
 import hadi.veri.project1.databinding.FragmentUsersBinding
-import retrofit2.Call
 
 class UsersFragment : Fragment() {
     private var _binding: FragmentUsersBinding? = null
@@ -120,30 +118,36 @@ class UsersFragment : Fragment() {
                 Toast.makeText(requireContext(), "Token tidak ditemukan", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-            val api = RetrofitClient.instance.create(UserManageApi::class.java)
 
             if (selectedPosition == -1) {
                 // Tambah user
-                api.createUser("Bearer $token", user).enqueue(object : retrofit2.Callback<SingleUserResponse> {
-                    override fun onResponse(call: Call<SingleUserResponse>, response: retrofit2.Response<SingleUserResponse>) {
-                        if (response.isSuccessful && response.body()?.success == true) {
+                UserManageApi.createUser(
+                    context = requireContext(),
+                    token = "Bearer $token",
+                    user = user,
+                    onSuccess = { response ->
+                        if (response.success) {
                             loadUserData()
                             clearForm()
                             Toast.makeText(requireContext(), "User berhasil ditambahkan", Toast.LENGTH_SHORT).show()
                         } else {
                             Toast.makeText(requireContext(), "Gagal menambahkan user", Toast.LENGTH_SHORT).show()
                         }
+                    },
+                    onError = { error ->
+                        Toast.makeText(requireContext(), "Error: ${error.message}", Toast.LENGTH_SHORT).show()
                     }
-                    override fun onFailure(call: Call<SingleUserResponse>, t: Throwable) {
-                        Toast.makeText(requireContext(), "Error: ${t.message}", Toast.LENGTH_SHORT).show()
-                    }
-                })
+                )
             } else {
                 // Update user
                 val userId = userList[selectedPosition].id ?: return@setOnClickListener
-                api.updateUser("Bearer $token", userId, user).enqueue(object : retrofit2.Callback<SingleUserResponse> {
-                    override fun onResponse(call: Call<SingleUserResponse>, response: retrofit2.Response<SingleUserResponse>) {
-                        if (response.isSuccessful && response.body()?.success == true) {
+                UserManageApi.updateUser(
+                    context = requireContext(),
+                    token = "Bearer $token",
+                    id = userId,
+                    user = user,
+                    onSuccess = { response ->
+                        if (response.success) {
                             loadUserData()
                             clearForm()
                             selectedPosition = -1
@@ -151,11 +155,11 @@ class UsersFragment : Fragment() {
                         } else {
                             Toast.makeText(requireContext(), "Gagal mengupdate user", Toast.LENGTH_SHORT).show()
                         }
+                    },
+                    onError = { error ->
+                        Toast.makeText(requireContext(), "Error: ${error.message}", Toast.LENGTH_SHORT).show()
                     }
-                    override fun onFailure(call: Call<SingleUserResponse>, t: Throwable) {
-                        Toast.makeText(requireContext(), "Error: ${t.message}", Toast.LENGTH_SHORT).show()
-                    }
-                })
+                )
             }
         }
     }
@@ -167,21 +171,20 @@ class UsersFragment : Fragment() {
             Toast.makeText(requireContext(), "Token tidak ditemukan", Toast.LENGTH_SHORT).show()
             return
         }
-        val api = RetrofitClient.instance.create(UserManageApi::class.java)
-        api.getUsers("Bearer $token").enqueue(object : retrofit2.Callback<UserResponse> {
-            override fun onResponse(call: Call<UserResponse>, response: retrofit2.Response<UserResponse>) {
-                if (response.isSuccessful && response.body()?.data != null) {
-                    userList.clear()
-                    userList.addAll(response.body()!!.data!!)
-                    adapter.notifyDataSetChanged()
-                } else {
-                    Toast.makeText(requireContext(), "Gagal memuat user", Toast.LENGTH_SHORT).show()
+        UserManageApi.getUsers(
+            context = requireContext(),
+            token = "Bearer $token",
+            onSuccess = { response ->
+                userList.clear()
+                if (response.data != null) {
+                    userList.addAll(response.data)
                 }
+                adapter.notifyDataSetChanged()
+            },
+            onError = { error ->
+                Toast.makeText(requireContext(), "Gagal memuat user: ${error.message}", Toast.LENGTH_SHORT).show()
             }
-            override fun onFailure(call: Call<UserResponse>, t: Throwable) {
-                Toast.makeText(requireContext(), "Error: ${t.message}", Toast.LENGTH_SHORT).show()
-            }
-        })
+        )
     }
 
     private fun addUser(user: User) {
@@ -191,21 +194,23 @@ class UsersFragment : Fragment() {
             Toast.makeText(requireContext(), "Token tidak ditemukan", Toast.LENGTH_SHORT).show()
             return
         }
-        val api = RetrofitClient.instance.create(UserManageApi::class.java)
-        api.createUser("Bearer $token", user).enqueue(object : retrofit2.Callback<SingleUserResponse> {
-            override fun onResponse(call: Call<SingleUserResponse>, response: retrofit2.Response<SingleUserResponse>) {
-                if (response.isSuccessful && response.body()?.success == true) {
+        UserManageApi.createUser(
+            context = requireContext(),
+            token = "Bearer $token",
+            user = user,
+            onSuccess = { response ->
+                if (response.success) {
                     loadUserData()
                     clearForm()
                     Toast.makeText(requireContext(), "User berhasil ditambahkan", Toast.LENGTH_SHORT).show()
                 } else {
                     Toast.makeText(requireContext(), "Gagal menambahkan user", Toast.LENGTH_SHORT).show()
                 }
+            },
+            onError = { error ->
+                Toast.makeText(requireContext(), "Error: ${error.message}", Toast.LENGTH_SHORT).show()
             }
-            override fun onFailure(call: Call<SingleUserResponse>, t: Throwable) {
-                Toast.makeText(requireContext(), "Error: ${t.message}", Toast.LENGTH_SHORT).show()
-            }
-        })
+        )
     }
 
     private fun updateUser(user: User) {
@@ -215,22 +220,25 @@ class UsersFragment : Fragment() {
             Toast.makeText(requireContext(), "Token tidak ditemukan", Toast.LENGTH_SHORT).show()
             return
         }
-        val api = RetrofitClient.instance.create(UserManageApi::class.java)
-        user.id?.let {
-            api.updateUser("Bearer $token", it, user).enqueue(object : retrofit2.Callback<SingleUserResponse> {
-                override fun onResponse(call: Call<SingleUserResponse>, response: retrofit2.Response<SingleUserResponse>) {
-                    if (response.isSuccessful && response.body()?.success == true) {
+        user.id?.let { userId ->
+            UserManageApi.updateUser(
+                context = requireContext(),
+                token = "Bearer $token",
+                id = userId,
+                user = user,
+                onSuccess = { response ->
+                    if (response.success) {
                         loadUserData()
                         clearForm()
                         Toast.makeText(requireContext(), "User berhasil diupdate", Toast.LENGTH_SHORT).show()
                     } else {
                         Toast.makeText(requireContext(), "Gagal mengupdate user", Toast.LENGTH_SHORT).show()
                     }
+                },
+                onError = { error ->
+                    Toast.makeText(requireContext(), "Error: ${error.message}", Toast.LENGTH_SHORT).show()
                 }
-                override fun onFailure(call: Call<SingleUserResponse>, t: Throwable) {
-                    Toast.makeText(requireContext(), "Error: ${t.message}", Toast.LENGTH_SHORT).show()
-                }
-            })
+            )
         }
     }
 
@@ -241,20 +249,22 @@ class UsersFragment : Fragment() {
             Toast.makeText(requireContext(), "Token tidak ditemukan", Toast.LENGTH_SHORT).show()
             return
         }
-        val api = RetrofitClient.instance.create(UserManageApi::class.java)
-        api.deleteUser("Bearer $token", id).enqueue(object : retrofit2.Callback<SingleUserResponse> {
-            override fun onResponse(call: Call<SingleUserResponse>, response: retrofit2.Response<SingleUserResponse>) {
-                if (response.isSuccessful && response.body()?.success == true) {
+        UserManageApi.deleteUser(
+            context = requireContext(),
+            token = "Bearer $token",
+            id = id,
+            onSuccess = { response ->
+                if (response.success) {
                     loadUserData()
                     Toast.makeText(requireContext(), "User berhasil dihapus", Toast.LENGTH_SHORT).show()
                 } else {
                     Toast.makeText(requireContext(), "Gagal menghapus user", Toast.LENGTH_SHORT).show()
                 }
+            },
+            onError = { error ->
+                Toast.makeText(requireContext(), "Error: ${error.message}", Toast.LENGTH_SHORT).show()
             }
-            override fun onFailure(call: Call<SingleUserResponse>, t: Throwable) {
-                Toast.makeText(requireContext(), "Error: ${t.message}", Toast.LENGTH_SHORT).show()
-            }
-        })
+        )
     }
 
     private fun clearForm() {
@@ -271,21 +281,15 @@ class UsersFragment : Fragment() {
     override fun onContextItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
             101 -> {
-                val user = userList[item.groupId] // Ambil user berdasarkan groupId
-                val result = user.id?.let { dbHelper.deleteUser(it) } // Hanya panggil deleteUser jika id tidak null
-
-                if (result != null && result > 0) {
-                    loadUserData()
-                    Toast.makeText(requireContext(), "User berhasil dihapus", Toast.LENGTH_SHORT).show()
-                } else {
-                    Toast.makeText(requireContext(), "Gagal menghapus user", Toast.LENGTH_SHORT).show()
+                val user = userList[item.groupId]
+                user.id?.let { userId ->
+                    deleteUser(userId)
                 }
                 true
             }
             else -> super.onContextItemSelected(item)
         }
     }
-
 
     override fun onDestroyView() {
         super.onDestroyView()
