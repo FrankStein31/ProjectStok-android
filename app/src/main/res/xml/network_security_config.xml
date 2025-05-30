@@ -8,7 +8,7 @@
         <domain includeSubdomains="true">192.168.100.172</domain>
         <domain includeSubdomains="true">192.168.1.73</domain>
         <domain includeSubdomains="true">192.168.1.164</domain>
-        <domain includeSubdomains="true">192.168.1.8</domain>
+        <domain includeSubdomains="true">192.168.1.25</domain>
         <domain includeSubdomains="true">192.168.18.66</domain>
         <domain includeSubdomains="true">192.168.10.195</domain>
         <trust-anchors>
