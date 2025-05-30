@@ -7,31 +7,22 @@ import androidx.appcompat.app.AppCompatActivity
 import hadi.veri.project1.WelcomeActivity
 import hadi.veri.project1.api.AuthApi
 import hadi.veri.project1.api.RegisterRequest
-import hadi.veri.project1.api.RegisterResponse
-import hadi.veri.project1.api.RetrofitClient
-import hadi.veri.project1.database.DBHelper
 import hadi.veri.project1.databinding.ActivityRegisterBinding
-import retrofit2.Call
-import retrofit2.Callback
-import retrofit2.Response
 
 class RegisterActivity : AppCompatActivity() {
     private lateinit var binding: ActivityRegisterBinding
-    private lateinit var dbHelper: DBHelper
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityRegisterBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        
-        dbHelper = DBHelper(this)
-        
+
         setupListeners()
     }
-    
+
     private fun setupListeners() {
         binding.btnBack.setOnClickListener {
-            onBackPressed()
+            onBackPressedDispatcher.onBackPressed()
         }
 
         binding.btnRegister.setOnClickListener {
@@ -56,25 +47,24 @@ class RegisterActivity : AppCompatActivity() {
                 address = if (address.isEmpty()) null else address
             )
 
-            val api = RetrofitClient.instance.create(AuthApi::class.java)
-            api.register(request).enqueue(object : Callback<RegisterResponse> {
-                override fun onResponse(call: Call<RegisterResponse>, response: Response<RegisterResponse>) {
-                    if (response.isSuccessful && response.body()?.success == true) {
-                        val message = response.body()?.message ?: "Registrasi berhasil"
-                        val registeredUser = response.body()?.user
-
-                        Toast.makeText(this@RegisterActivity, "$message. Silakan login.", Toast.LENGTH_SHORT).show()
-                        startActivity(Intent(this@RegisterActivity, LoginActivity::class.java))
-                        finish()
-                    } else {
-                        Toast.makeText(this@RegisterActivity, "Gagal: ${response.body()?.message ?: response.message()}", Toast.LENGTH_LONG).show()
-                    }
+            // Menggunakan AuthApi berbasis Volley
+            AuthApi.register(
+                context = this,
+                request = request,
+                onSuccess = { registerResponse ->
+                    val message = registerResponse.message ?: "Registrasi berhasil"
+                    Toast.makeText(this@RegisterActivity, "$message. Silakan login.", Toast.LENGTH_SHORT).show()
+                    startActivity(Intent(this@RegisterActivity, LoginActivity::class.java))
+                    finish()
+                },
+                onError = { error ->
+                    Toast.makeText(
+                        this@RegisterActivity,
+                        "Gagal: ${error.message}",
+                        Toast.LENGTH_LONG
+                    ).show()
                 }
-
-                override fun onFailure(call: Call<RegisterResponse>, t: Throwable) {
-                    Toast.makeText(this@RegisterActivity, "Error: ${t.message}", Toast.LENGTH_SHORT).show()
-                }
-            })
+            )
         }
 
         binding.tvLogin.setOnClickListener {
@@ -82,7 +72,7 @@ class RegisterActivity : AppCompatActivity() {
             finish()
         }
     }
-    
+
     private fun navigateToWelcome() {
         startActivity(Intent(this, WelcomeActivity::class.java))
         finish()

@@ -10,14 +10,9 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
 import hadi.veri.project1.api.AuthApi
-import hadi.veri.project1.api.LogoutResponse
-import hadi.veri.project1.api.RetrofitClient
 import hadi.veri.project1.databinding.ActivityMainBinding
 import hadi.veri.project1.fragments.DataFragment
 import hadi.veri.project1.fragments.HomeFragment
-import retrofit2.Call
-import retrofit2.Callback
-import retrofit2.Response
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
@@ -93,28 +88,23 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        val api = RetrofitClient.instance.create(AuthApi::class.java)
-        val call = api.logout("Bearer $token")
+        // GANTI Retrofit dengan AuthApi berbasis Volley
+        AuthApi.logout(
+            context = this,
+            token = "Bearer $token",
+            onSuccess = { _ ->
+                // Hapus session dan redirect
+                sharedPreferences.edit().clear().apply()
 
-        call.enqueue(object : Callback<LogoutResponse> {
-            override fun onResponse(call: Call<LogoutResponse>, response: Response<LogoutResponse>) {
-                if (response.isSuccessful) {
-                    // Hapus session dan redirect
-                    sharedPreferences.edit().clear().apply()
-
-                    val intent = Intent(this@MainActivity, WelcomeActivity::class.java)
-                    intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                    startActivity(intent)
-                    finish()
-                } else {
-                    Toast.makeText(this@MainActivity, "Logout gagal: ${response.message()}", Toast.LENGTH_SHORT).show()
-                }
+                val intent = Intent(this@MainActivity, WelcomeActivity::class.java)
+                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                startActivity(intent)
+                finish()
+            },
+            onError = { error ->
+                Toast.makeText(this@MainActivity, "Logout gagal: ${error.message}", Toast.LENGTH_SHORT).show()
             }
-
-            override fun onFailure(call: Call<LogoutResponse>, t: Throwable) {
-                Toast.makeText(this@MainActivity, "Logout error: ${t.message}", Toast.LENGTH_SHORT).show()
-            }
-        })
+        )
     }
 
     private fun replaceFragment(fragment: Fragment) {
