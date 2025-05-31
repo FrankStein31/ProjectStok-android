@@ -12,7 +12,7 @@ object VolleyClient {
      * URL dasar untuk API.
      * Ganti dengan URL server Anda.
      */
-    private const val BASE_URL = "http://192.168.1.25:8000/"
+    private const val BASE_URL = "http://192.168.1.155:8000/"
 
     /**
      * RequestQueue untuk mengelola permintaan HTTP.
